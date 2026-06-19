@@ -16,7 +16,8 @@ Route map:
 * ``GET /api/agents``    — sanitized agent/token registry (auth required).
 * ``GET /api/agents/{agent_id}`` — sanitized agent detail (auth required).
 * ``GET /api/health/services`` — sanitized local service health (auth required).
-* ``GET /api/audit/events`` — scaffold audit feed (auth required).
+* ``GET /api/telemetry`` — token-safe fallback API telemetry (auth required).
+* ``GET /api/audit/events`` — sanitized audit-event feed (auth required).
 """
 
 from __future__ import annotations
@@ -51,6 +52,11 @@ from console.backend.app.models import (
     AgentRegistrySummaryResponse,
     ServiceHealthResponse,
 )
+from console.backend.app.observability import (
+    AuditTrail,
+    RequestObservabilityMiddleware,
+    TelemetryRecorder,
+)
 from console.backend.app.redaction import redact_sensitive
 from console.backend.app.settings import ConsoleSettings
 
@@ -63,6 +69,8 @@ def create_app(
     honcho_api_adapter: HonchoAPIAdapter | None = None,
     fleet_registry_adapter: FleetRegistryClient | None = None,
     local_health_adapter: Any | None = None,
+    telemetry_recorder: TelemetryRecorder | None = None,
+    audit_trail: AuditTrail | None = None,
 ) -> FastAPI:
     """Build a console backend application.
 
@@ -76,6 +84,10 @@ def create_app(
             adapter is created from settings.
         local_health_adapter: optional local health adapter override used by tests.
             When omitted, the default safe adapter is created from settings.
+        telemetry_recorder: optional token-safe telemetry recorder override for
+            tests or future persistent implementations.
+        audit_trail: optional audit trail override for tests or future persistent
+            implementations.
 
     Returns:
         A configured :class:`fastapi.FastAPI` instance with Basic Auth enforced on
@@ -99,7 +111,21 @@ def create_app(
     application.state.local_health = local_health_adapter or LocalServiceHealthAdapter(
         settings
     )
+    application.state.telemetry = telemetry_recorder or TelemetryRecorder(
+        token=settings.honcho_api_token,
+        expected_workspace=settings.honcho_workspace,
+        signing_secret=_secret_or_none(settings.jwt_secret),
+    )
+    application.state.audit_trail = audit_trail or AuditTrail(
+        token_fingerprint=application.state.telemetry.token_fingerprint,
+        token_scope=application.state.telemetry.token_scope,
+    )
     application.add_middleware(BasicAuthMiddleware, settings=settings)
+    application.add_middleware(
+        RequestObservabilityMiddleware,
+        telemetry=application.state.telemetry,
+        audit_trail=application.state.audit_trail,
+    )
 
     @application.exception_handler(HonchoAPIUnavailable)
     async def honcho_api_unavailable_handler(
@@ -370,19 +396,32 @@ def create_app(
         response: ServiceHealthResponse = application.state.local_health.collect()
         return redact_sensitive(response.model_dump(mode="json"))
 
+    @application.get("/api/telemetry", tags=["console"])
+    def get_telemetry() -> dict[str, Any]:
+        """Return token-safe fallback API telemetry aggregates."""
+
+        response = application.state.telemetry.snapshot()
+        return redact_sensitive(response.model_dump(mode="json"))
+
     @application.get("/api/audit/events", tags=["console"])
     def get_audit_events() -> dict[str, Any]:
-        """Return a scaffold audit-event feed (no events recorded yet)."""
+        """Return sanitized console operation audit events."""
 
-        payload: dict[str, Any] = {
-            "service": "honcho-memory-console",
-            "status": "scaffold",
-            "events": [],
-            "total": 0,
-        }
-        return redact_sensitive(payload)
+        response = application.state.audit_trail.snapshot()
+        return redact_sensitive(response.model_dump(mode="json"))
 
     return application
+
+
+def _secret_or_none(value: Any) -> str | None:
+    """Return a server-side secret value for local derivation, never serialization."""
+
+    if value is None:
+        return None
+    get_secret_value = getattr(value, "get_secret_value", None)
+    raw = get_secret_value() if callable(get_secret_value) else value
+    text = str(raw or "")
+    return text or None
 
 
 #: Module-level application singleton for ASGI servers (``uvicorn ... :app``).

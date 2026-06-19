@@ -12,6 +12,8 @@ Repo-managed FastAPI scaffold for the private Honcho Memory Console.
 - `redact_sensitive()` is the defense-in-depth sanitizer for Authorization headers and secret-like fields; token `scope` and `status` are explicitly safe because they are metadata, not credentials.
 - `GET /api/agents` and `GET /api/agents/{agent_id}` return only token fingerprints/scope/status — never raw token values.
 - `GET /api/health/services` runs only fixed, allowlisted local checks and returns sanitized evidence; it never accepts command names or shell fragments from the browser.
+- `GET /api/telemetry` provides a fallback aggregation when upstream Honcho lacks per-token request metrics. It stores route/status/latency windows tagged only by the configured token fingerprint and scope.
+- `GET /api/audit/events` returns the retained console operation trail. Audit events record actor/action/outcome/route/status only; request bodies, response bodies, headers, raw tokens, and secrets are not accepted by the recorder API.
 
 ## Runtime settings
 
@@ -65,10 +67,9 @@ Do not commit actual values for any of those variables.
 
 From the repository root:
 
-```bash
-uv run pytest console/backend/tests -q
-uv run ruff check console/backend
-```
+- `uv run --frozen pytest console/backend/tests -q` -> `28 passed in 5.21s` on this T09 branch.
+- `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
 
 Run locally for manual smoke testing:
 

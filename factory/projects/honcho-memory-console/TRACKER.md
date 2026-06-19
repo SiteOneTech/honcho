@@ -20,7 +20,7 @@ Status: G1 ready for autonomous Factory execution
 | T06 Agents table and agent detail UX | todo | Core tenant view |
 | T07 Health cockpit UX and integration | todo | Option B health surface included |
 | T08 Memory explorer UX and integration | todo | Workspace/peer/conclusion views |
-| T09 Token/API telemetry and audit trail | todo | Per-token usage if needed |
+| T09 Token/API telemetry and audit trail | implementation done / pending security review | Backend `/api/telemetry` fallback aggregation and live `/api/audit/events` implemented with fingerprint/scope-only tests; evidence in QA_REPORT.md and SECURITY_REVIEW.md |
 | T09S Security review for auth, tokens, telemetry, and commands | todo | Security gate coverage |
 | T10 Private Tailscale sandbox deploy packaging for honcho-memory-prod | todo | Repo-managed deploy to private Tailscale surface |
 | T11 Browser QA, accessibility, and visual polish pass | todo | Playwright/browser evidence |
