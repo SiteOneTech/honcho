@@ -220,6 +220,58 @@ def test_fleet_registry_entries_take_precedence_and_sanitize_registry_tokens():
     _assert_not_serialized(body, registry_token, _secret("fleet-db-url"), BASIC_PASSWORD)
 
 
+def test_fleet_registry_rejects_noncanonical_token_fingerprint_without_leaking_it():
+    raw_looking_sentinel = _jwt({"t": "", "w": "agent-workspace"})
+    fleet = FleetRegistryFixture(
+        rows=[
+            {
+                "agent_id": "worker-alpha",
+                "display_name": "Worker Alpha",
+                "tenant_id": "sitiouno",
+                "runtime_vm": "worker-vm-01",
+                "honcho_workspace": "agent-workspace",
+                "ai_peer": "worker-peer",
+                "token_fingerprint": raw_looking_sentinel,
+                "token_scope": "workspace:agent-workspace",
+                "token_status": "valid",
+            }
+        ]
+    )
+    client = TestClient(
+        create_app(
+            _settings(fleet_registry_database_url=SecretStr(_secret("fleet-db-url"))),
+            fleet_registry_adapter=fleet,
+        )
+    )
+
+    list_response = client.get("/api/agents", headers=_basic_auth())
+    detail_response = client.get("/api/agents/worker-alpha", headers=_basic_auth())
+
+    assert list_response.status_code == 200
+    list_body = list_response.json()
+    list_agent = list_body["agents"][0]
+    assert list_agent["token_fingerprint"] is None
+    assert list_agent["token_scope"] == "unknown"
+    assert list_agent["token_status"] == "unknown"
+    assert any(
+        alert["code"] == "fleet_registry_token_fingerprint_invalid"
+        for alert in list_agent["alerts"]
+    )
+    _assert_not_serialized(list_body, raw_looking_sentinel, _secret("fleet-db-url"))
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    detail_agent = detail_body["agent"]
+    assert detail_agent["token_fingerprint"] is None
+    assert detail_agent["token_scope"] == "unknown"
+    assert detail_agent["token_status"] == "unknown"
+    assert any(
+        alert["code"] == "fleet_registry_token_fingerprint_invalid"
+        for alert in detail_agent["alerts"]
+    )
+    _assert_not_serialized(detail_body, raw_looking_sentinel, _secret("fleet-db-url"))
+
+
 def test_fleet_registry_failure_degrades_to_config_discovery_fallback():
     fleet = FleetRegistryFixture(exc=RuntimeError("registry unavailable"))
     client = TestClient(
