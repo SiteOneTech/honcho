@@ -82,3 +82,112 @@ export interface WorkspaceSummaryRow {
   conclusions: number;
   lastActivityAt: string;
 }
+
+export type MemorySource = 'live' | 'fixture';
+
+export interface MemoryPageEnvelope<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+}
+
+export interface MemoryWorkspace {
+  id: string;
+  metadata: Record<string, unknown>;
+  configurationKeys: string[];
+  createdAt: string | null;
+}
+
+export interface MemoryPeer {
+  id: string;
+  workspaceId: string | null;
+  metadata: Record<string, unknown>;
+  configurationKeys: string[];
+  createdAt: string | null;
+}
+
+export interface QueueWorkUnitSummary {
+  totalWorkUnits: number;
+  completedWorkUnits: number;
+  inProgressWorkUnits: number;
+  pendingWorkUnits: number;
+}
+
+export interface MemoryQueueSummary extends QueueWorkUnitSummary {
+  sessions: Record<string, QueueWorkUnitSummary>;
+}
+
+export interface PeerCardEntry {
+  index: number;
+  text: string;
+  sensitive: boolean;
+}
+
+export interface PeerCard {
+  total: number;
+  entries: PeerCardEntry[];
+}
+
+export interface PeerRepresentation {
+  representation: string | null;
+  sensitive: boolean;
+}
+
+export interface PeerContext {
+  peerId: string | null;
+  targetId: string | null;
+  representation: string | null;
+  peerCard: PeerCardEntry[];
+  sensitive: boolean;
+}
+
+export interface MemorySession {
+  id: string;
+  workspaceId: string | null;
+  isActive: boolean | null;
+  metadata: Record<string, unknown>;
+  configurationKeys: string[];
+  createdAt: string | null;
+}
+
+export interface MessageSummary {
+  id: string;
+  workspaceId: string | null;
+  sessionId: string | null;
+  peerId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string | null;
+  tokenCount: number | null;
+  contentHidden: boolean;
+  contentPreview: string | null;
+  sensitive: boolean;
+}
+
+export interface ConclusionSummary {
+  id: string;
+  observerId: string | null;
+  observedId: string | null;
+  sessionId: string | null;
+  createdAt: string | null;
+  contentPreview: string | null;
+  sensitive: boolean;
+}
+
+export interface MemoryExplorerSnapshot {
+  source: MemorySource;
+  loadedAt: string;
+  selectedWorkspaceId: string | null;
+  selectedPeerId: string | null;
+  selectedSessionId: string | null;
+  workspaces: MemoryWorkspace[];
+  queue: MemoryQueueSummary | null;
+  peers: MemoryPeer[];
+  peerCard: PeerCard;
+  representation: PeerRepresentation;
+  context: PeerContext;
+  sessions: MemorySession[];
+  messages: MessageSummary[];
+  conclusions: ConclusionSummary[];
+}

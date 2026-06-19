@@ -7,10 +7,10 @@ import {
   agentsFixture,
   auditFixture,
   healthSnapshotFixture,
+  memoryExplorerFixture,
   overviewFixture,
   providersFixture,
   telemetryFixture,
-  workspacesFixture,
 } from './lib/fixtures';
 import { absoluteTime, compactNumber, percent, relativeTime, sparklinePath, statusLabel } from './lib/format';
 import {
@@ -21,9 +21,23 @@ import {
   type HealthEvidencePill,
   type HealthGroupId,
 } from './lib/health';
+import { fetchMemoryExplorerSnapshot } from './lib/memory';
 import { navigate, type RouteId, useRoute } from './lib/router';
 import { applyTheme, readInitialTheme, type ThemeMode } from './lib/theme';
-import type { AgentRow, HealthCheck, HealthServicesSnapshot, HealthStatus, TokenStatus } from './lib/types';
+import type {
+  AgentRow,
+  ConclusionSummary,
+  HealthCheck,
+  HealthServicesSnapshot,
+  HealthStatus,
+  MemoryExplorerSnapshot,
+  MemoryPeer,
+  MemorySession,
+  MemoryWorkspace,
+  MessageSummary,
+  PeerCardEntry,
+  TokenStatus,
+} from './lib/types';
 
 interface NavItem {
   id: RouteId;
@@ -58,9 +72,9 @@ const SECTION_COPY: Record<RouteId, { eyebrow: string; title: string; descriptio
   },
   memory: {
     eyebrow: 'Memory graph',
-    title: 'Workspace and conclusion inventory',
+    title: 'Memory explorer',
     description:
-      'Summary-first navigation for workspaces and peers; full message content stays behind later explicit controls.',
+      'Summary-first navigation for workspaces, peers, sessions, messages, conclusions, and peer context with sensitive content hidden by default.',
   },
   health: {
     eyebrow: 'Cockpit',
@@ -211,10 +225,18 @@ function App() {
           <div className="fixture-banner" data-live-health={route === 'health' ? 'true' : 'false'}>
             <Icon name="alert" size={17} />
             <span>
-              <strong>{route === 'health' ? 'Live health integration.' : 'Fixture-supported shell.'}</strong>{' '}
+              <strong>
+                {route === 'health'
+                  ? 'Live health integration.'
+                  : route === 'memory'
+                    ? 'Live memory integration.'
+                    : 'Fixture-supported shell.'}
+              </strong>{' '}
               {route === 'health'
                 ? 'The Health cockpit queries /api/health/services and falls back to an explicit offline state when the backend cannot be reached.'
-                : FIXTURE_META.note}
+                : route === 'memory'
+                  ? 'The Memory explorer queries /api/memory and keeps sensitive message content behind explicit disclosure controls.'
+                  : FIXTURE_META.note}
             </span>
           </div>
 
@@ -415,50 +437,495 @@ function AgentDetail({ agent }: { agent: AgentRow }) {
 }
 
 function MemoryPage() {
+  const [snapshot, setSnapshot] = useState<MemoryExplorerSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [peerContextRevealed, setPeerContextRevealed] = useState(false);
+  const [revealedMessages, setRevealedMessages] = useState<Set<string>>(() => new Set());
+
+  const loadMemory = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    setPeerContextRevealed(false);
+    setRevealedMessages(new Set());
+    try {
+      const next = await fetchMemoryExplorerSnapshot();
+      setSnapshot(next);
+    } catch {
+      setSnapshot(memoryExplorerFixture);
+      setError('The backend memory adapter is unavailable; showing explicit fixture fallback data.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMemory();
+  }, [loadMemory]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={6} title="Memory explorer is loading workspace, peer, session, and conclusion metadata" />;
+  }
+
+  const activeSnapshot = snapshot ?? memoryExplorerFixture;
+  const visibleWorkspaces = filterWorkspaces(activeSnapshot.workspaces, filter);
+  const visiblePeers = filterPeers(activeSnapshot.peers, filter);
+  const visibleCardEntries = filterPeerCard(activeSnapshot.peerCard.entries, filter);
+  const visibleSessions = filterSessions(activeSnapshot.sessions, filter);
+  const visibleMessages = filterMessages(activeSnapshot.messages, filter);
+  const visibleConclusions = filterConclusions(activeSnapshot.conclusions, filter);
+
+  const toggleMessage = (messageId: string) => {
+    setRevealedMessages((current) => {
+      const next = new Set(current);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  };
+
   return (
-    <section className="grid grid--2">
-      <Panel title="Workspace inventory" hint="Summary-first memory view">
-        <div className="table-wrap">
-          <table className="data">
-            <caption className="sr-only">Workspace memory summary</caption>
-            <thead>
-              <tr>
-                <th scope="col">Workspace</th>
-                <th scope="col" className="num">Peers</th>
-                <th scope="col" className="num">Sessions</th>
-                <th scope="col" className="num">Conclusions</th>
-                <th scope="col">Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workspacesFixture.map((workspace) => (
-                <WorkspaceRow key={workspace.workspace} workspace={workspace} />
-              ))}
-            </tbody>
-          </table>
+    <section className="memory-explorer" aria-label="Memory explorer surfaces">
+      <div className="memory-toolbar">
+        <div>
+          <div className="memory-toolbar__source">
+            Source: {activeSnapshot.source === 'live' ? 'backend /api/memory' : 'fixture fallback'} · Loaded{' '}
+            {absoluteTime(activeSnapshot.loadedAt)}
+          </div>
+          <div className="memory-toolbar__summary">
+            {activeSnapshot.workspaces.length} workspaces · {activeSnapshot.peers.length} peers · {activeSnapshot.sessions.length}{' '}
+            sessions · {activeSnapshot.messages.length} messages · {activeSnapshot.conclusions.length} conclusions
+          </div>
         </div>
-      </Panel>
-      <Panel title="Content controls" hint="Protected-by-default UX">
-        <EmptyState
-          title="No message body opened"
-          description="The shell starts with counts, peer summaries, and conclusion metadata. Full text inspection is a later explicit action with clear visual labeling."
-          icon="shield"
-        />
-      </Panel>
+        <label className="memory-filter">
+          <Icon className="topbar__search-icon" name="search" size={17} />
+          <input
+            aria-label="Filter memory graph"
+            placeholder="Filter memory graph by workspace, peer, session, message, or conclusion…"
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.currentTarget.value)}
+          />
+        </label>
+        <button className="button button--accent" type="button" onClick={loadMemory} disabled={isLoading}>
+          <Icon name="refresh" size={16} />
+          {isLoading ? 'Refreshing…' : 'Refresh memory'}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="health-cockpit__notice" role="status">
+          Memory refresh degraded: {error}
+        </div>
+      ) : null}
+
+      <section className="metric-strip" aria-label="Memory explorer metrics">
+        <Metric label="Workspaces" value={compactNumber(activeSnapshot.workspaces.length)} detail={activeSnapshot.selectedWorkspaceId ?? 'No workspace selected'} icon="memory" />
+        <Metric label="Peers" value={compactNumber(activeSnapshot.peers.length)} detail={activeSnapshot.selectedPeerId ? 'Selected peer active' : 'No peer selected'} icon="agents" />
+        <Metric label="Queue pending" value={compactNumber(activeSnapshot.queue?.pendingWorkUnits ?? 0)} detail={`${compactNumber(activeSnapshot.queue?.completedWorkUnits ?? 0)} completed`} icon="health" />
+        <Metric label="Messages" value={compactNumber(activeSnapshot.messages.length)} detail="Sensitive message content hidden by default" icon="shield" />
+      </section>
+
+      <section className="grid grid--2 memory-grid">
+        <Panel title="Workspace explorer" hint="Live workspace metadata">
+          <WorkspaceExplorerTable workspaces={visibleWorkspaces} selectedWorkspaceId={activeSnapshot.selectedWorkspaceId} />
+        </Panel>
+
+        <Panel title="Peers" hint="Peer metadata and configuration keys">
+          <PeersTable peers={visiblePeers} selectedPeerId={activeSnapshot.selectedPeerId} />
+        </Panel>
+
+        <Panel title="Peer card" hint={`${activeSnapshot.peerCard.total} entries reported`}>
+          <PeerCardList entries={visibleCardEntries} />
+        </Panel>
+
+        <Panel title="Representation" hint="Explicit disclosure required">
+          <PeerDisclosure
+            label="representation"
+            revealed={peerContextRevealed}
+            onReveal={() => setPeerContextRevealed((current) => !current)}
+            text={activeSnapshot.representation.representation}
+            sensitive={activeSnapshot.representation.sensitive}
+          />
+        </Panel>
+
+        <Panel title="Context" hint="Peer-to-target context">
+          <PeerContextDisclosure
+            contextEntries={activeSnapshot.context.peerCard}
+            peerContextRevealed={peerContextRevealed}
+            representation={activeSnapshot.context.representation}
+            sensitive={activeSnapshot.context.sensitive}
+          />
+        </Panel>
+
+        <Panel title="Sessions" hint="Metadata only">
+          <SessionsTable sessions={visibleSessions} selectedSessionId={activeSnapshot.selectedSessionId} />
+        </Panel>
+
+        <Panel title="Messages" hint="Reveal sensitive content only when needed">
+          <MessagesTable messages={visibleMessages} revealedMessages={revealedMessages} onToggleMessage={toggleMessage} />
+        </Panel>
+
+        <Panel title="Conclusions" hint="Preview text only">
+          <ConclusionsTable conclusions={visibleConclusions} />
+        </Panel>
+      </section>
     </section>
   );
 }
 
-function WorkspaceRow({ workspace }: { workspace: (typeof workspacesFixture)[number] }) {
+function WorkspaceExplorerTable({
+  workspaces,
+  selectedWorkspaceId,
+}: {
+  workspaces: MemoryWorkspace[];
+  selectedWorkspaceId: string | null;
+}) {
+  if (workspaces.length === 0) {
+    return <EmptyState title="No workspaces match" description="Adjust the memory graph filter or refresh the backend memory adapter." icon="memory" />;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Workspace memory data</caption>
+        <thead>
+          <tr>
+            <th scope="col">Workspace</th>
+            <th scope="col">Configuration</th>
+            <th scope="col">Metadata</th>
+            <th scope="col">Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {workspaces.map((workspace) => (
+            <tr key={workspace.id} data-selected={workspace.id === selectedWorkspaceId ? 'true' : 'false'}>
+              <td className="cell-primary">{workspace.id}</td>
+              <td>{configurationLabel(workspace.configurationKeys)}</td>
+              <td>{metadataSummary(workspace.metadata)}</td>
+              <td>{absoluteTime(workspace.createdAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PeersTable({ peers, selectedPeerId }: { peers: MemoryPeer[]; selectedPeerId: string | null }) {
+  if (peers.length === 0) {
+    return <EmptyState title="No peers match" description="Peer metadata is filtered out or unavailable from the memory adapter." icon="agents" />;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Peer metadata data</caption>
+        <thead>
+          <tr>
+            <th scope="col">Peer</th>
+            <th scope="col">Workspace</th>
+            <th scope="col">Configuration</th>
+            <th scope="col">Metadata</th>
+          </tr>
+        </thead>
+        <tbody>
+          {peers.map((peer) => (
+            <tr key={peer.id} data-selected={peer.id === selectedPeerId ? 'true' : 'false'}>
+              <td className="cell-primary">{peer.id}</td>
+              <td>{peer.workspaceId ?? 'not reported'}</td>
+              <td>{configurationLabel(peer.configurationKeys)}</td>
+              <td>{metadataSummary(peer.metadata)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PeerCardList({ entries }: { entries: PeerCardEntry[] }) {
+  if (entries.length === 0) {
+    return <EmptyState title="No peer-card entries" description="The selected peer has no card entries matching the current filter." icon="inbox" />;
+  }
+  return (
+    <div className="memory-card-list">
+      {entries.map((entry) => (
+        <article className="memory-card-entry" key={`${entry.index}:${entry.text}`}>
+          <div className="memory-card-entry__index">#{entry.index}</div>
+          <div className="memory-card-entry__text">{entry.text}</div>
+          {entry.sensitive ? (
+            <span className="chip chip--degraded">
+              <span className="chip__dot" aria-hidden="true" />
+              Sensitive
+            </span>
+          ) : (
+            <span className="chip chip--info">
+              <span className="chip__dot" aria-hidden="true" />
+              Summary
+            </span>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function PeerDisclosure({
+  label,
+  revealed,
+  onReveal,
+  text,
+  sensitive,
+}: {
+  label: string;
+  revealed: boolean;
+  onReveal: () => void;
+  text: string | null;
+  sensitive: boolean;
+}) {
+  return (
+    <div className="memory-disclosure">
+      <button className="button" type="button" aria-pressed={revealed} onClick={onReveal}>
+        <Icon name="shield" size={16} />
+        Reveal peer context
+      </button>
+      {revealed ? (
+        <div className="memory-copy">
+          <div className="memory-copy__label">{label}{sensitive ? ' · sensitive' : ''}</div>
+          <p>{text ?? 'No representation text reported.'}</p>
+        </div>
+      ) : (
+        <EmptyState
+          title="Peer context hidden"
+          description="Representation and context stay hidden until an operator explicitly reveals the peer context."
+          icon="shield"
+        />
+      )}
+    </div>
+  );
+}
+
+function PeerContextDisclosure({
+  contextEntries,
+  peerContextRevealed,
+  representation,
+  sensitive,
+}: {
+  contextEntries: PeerCardEntry[];
+  peerContextRevealed: boolean;
+  representation: string | null;
+  sensitive: boolean;
+}) {
+  if (!peerContextRevealed) {
+    return (
+      <EmptyState
+        title="Context hidden by default"
+        description="Use Reveal peer context in the Representation panel to disclose contextual text for this selected peer."
+        icon="shield"
+      />
+    );
+  }
+
+  return (
+    <div className="memory-copy">
+      <div className="memory-copy__label">Context{sensitive ? ' · sensitive' : ''}</div>
+      <p>{representation ?? 'No context representation reported.'}</p>
+      {contextEntries.length > 0 ? (
+        <div className="memory-card-list memory-card-list--compact">
+          {contextEntries.map((entry) => (
+            <div className="memory-card-entry" key={`${entry.index}:${entry.text}`}>
+              <span className="memory-card-entry__index">#{entry.index}</span>
+              <span>{entry.text}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SessionsTable({ sessions, selectedSessionId }: { sessions: MemorySession[]; selectedSessionId: string | null }) {
+  if (sessions.length === 0) {
+    return <EmptyState title="No sessions match" description="No session metadata matches the active memory graph filter." icon="inbox" />;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Session metadata data</caption>
+        <thead>
+          <tr>
+            <th scope="col">Session</th>
+            <th scope="col">Active</th>
+            <th scope="col">Configuration</th>
+            <th scope="col">Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sessions.map((session) => (
+            <tr key={session.id} data-selected={session.id === selectedSessionId ? 'true' : 'false'}>
+              <td className="cell-primary">{session.id}</td>
+              <td>{session.isActive === null ? 'unknown' : session.isActive ? 'active' : 'inactive'}</td>
+              <td>{configurationLabel(session.configurationKeys)}</td>
+              <td>{absoluteTime(session.createdAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MessagesTable({
+  messages,
+  revealedMessages,
+  onToggleMessage,
+}: {
+  messages: MessageSummary[];
+  revealedMessages: Set<string>;
+  onToggleMessage: (messageId: string) => void;
+}) {
+  if (messages.length === 0) {
+    return <EmptyState title="No messages match" description="Message metadata is filtered out or unavailable for the selected session." icon="inbox" />;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Message metadata data</caption>
+        <thead>
+          <tr>
+            <th scope="col">Message</th>
+            <th scope="col">Peer</th>
+            <th scope="col">Metadata</th>
+            <th scope="col">Content control</th>
+          </tr>
+        </thead>
+        <tbody>
+          {messages.map((message) => (
+            <MessageRow key={message.id} message={message} revealedMessages={revealedMessages} onToggleMessage={onToggleMessage} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MessageRow({
+  message,
+  revealedMessages,
+  onToggleMessage,
+}: {
+  message: MessageSummary;
+  revealedMessages: Set<string>;
+  onToggleMessage: (messageId: string) => void;
+}) {
+  const isRevealed = !message.contentHidden || revealedMessages.has(message.id);
   return (
     <tr>
-      <td className="cell-primary">{workspace.workspace}</td>
-      <td className="num">{compactNumber(workspace.peers)}</td>
-      <td className="num">{compactNumber(workspace.sessions)}</td>
-      <td className="num">{compactNumber(workspace.conclusions)}</td>
-      <td>{relativeTime(workspace.lastActivityAt)}</td>
+      <td>
+        <div className="cell-primary">{message.id}</div>
+        <div className="cell-sub">{absoluteTime(message.createdAt)} · {message.tokenCount ?? 0} tokens</div>
+      </td>
+      <td>{message.peerId ?? 'not reported'}</td>
+      <td>{metadataSummary(message.metadata)}</td>
+      <td>
+        <div className="memory-message-control">
+          <div className={isRevealed ? 'memory-message-preview' : 'memory-message-preview memory-message-preview--hidden'}>
+            {isRevealed ? message.contentPreview ?? 'No safe preview reported.' : 'Message content hidden by default.'}
+          </div>
+          {message.contentHidden ? (
+            <button className="button" type="button" aria-pressed={revealedMessages.has(message.id)} onClick={() => onToggleMessage(message.id)}>
+              <Icon name="shield" size={16} />
+              {revealedMessages.has(message.id) ? `Hide sensitive content for ${message.id}` : `Reveal sensitive content for ${message.id}`}
+            </button>
+          ) : null}
+        </div>
+      </td>
     </tr>
   );
+}
+
+function ConclusionsTable({ conclusions }: { conclusions: ConclusionSummary[] }) {
+  if (conclusions.length === 0) {
+    return <EmptyState title="No conclusions match" description="Conclusion previews are filtered by id and preview text only." icon="inbox" />;
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Conclusion preview data</caption>
+        <thead>
+          <tr>
+            <th scope="col">Conclusion</th>
+            <th scope="col">Session</th>
+            <th scope="col">Preview</th>
+            <th scope="col">Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {conclusions.map((conclusion) => (
+            <tr key={conclusion.id}>
+              <td className="cell-primary">{conclusion.id}</td>
+              <td>{conclusion.sessionId ?? 'global'}</td>
+              <td>{conclusion.contentPreview ?? 'No preview reported.'}</td>
+              <td>{absoluteTime(conclusion.createdAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function filterWorkspaces(workspaces: MemoryWorkspace[], filter: string): MemoryWorkspace[] {
+  return workspaces.filter((workspace) => matchesFilter([workspace.id, metadataSummary(workspace.metadata), configurationLabel(workspace.configurationKeys)], filter));
+}
+
+function filterPeers(peers: MemoryPeer[], filter: string): MemoryPeer[] {
+  return peers.filter((peer) => matchesFilter([peer.id, peer.workspaceId ?? '', metadataSummary(peer.metadata), configurationLabel(peer.configurationKeys)], filter));
+}
+
+function filterPeerCard(entries: PeerCardEntry[], filter: string): PeerCardEntry[] {
+  return entries.filter((entry) => matchesFilter([entry.text, String(entry.index)], filter));
+}
+
+function filterSessions(sessions: MemorySession[], filter: string): MemorySession[] {
+  return sessions.filter((session) => matchesFilter([session.id, session.workspaceId ?? '', metadataSummary(session.metadata)], filter));
+}
+
+function filterMessages(messages: MessageSummary[], filter: string): MessageSummary[] {
+  return messages.filter((message) =>
+    matchesFilter([message.id, message.peerId ?? '', message.sessionId ?? '', message.contentHidden ? '' : message.contentPreview ?? ''], filter),
+  );
+}
+
+function filterConclusions(conclusions: ConclusionSummary[], filter: string): ConclusionSummary[] {
+  return conclusions.filter((conclusion) => matchesFilter([conclusion.id, conclusion.contentPreview ?? ''], filter));
+}
+
+function matchesFilter(values: string[], filter: string): boolean {
+  const needle = filter.trim().toLowerCase();
+  if (!needle) return true;
+  return values.some((value) => value.toLowerCase().includes(needle));
+}
+
+function configurationLabel(keys: string[]): string {
+  return keys.length === 0 ? 'none' : keys.join(', ');
+}
+
+function metadataSummary(metadata: Record<string, unknown>): string {
+  const entries = Object.entries(metadata);
+  if (entries.length === 0) return 'No metadata';
+  return entries.slice(0, 3).map(([key, value]) => `${key}: ${metadataValue(value)}`).join(' · ');
+}
+
+function metadataValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'not reported';
+  if (typeof value === 'string') return value.length > 32 ? `${value.slice(0, 29)}…` : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+  return 'object';
 }
 
 function HealthPage() {
