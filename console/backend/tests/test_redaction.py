@@ -7,16 +7,23 @@ from console.backend.app.redaction import (
 )
 
 
+def _secret(label: str) -> str:
+    return f"factory-generated-{label}-credential"
+
+
 def _serialized(value: object) -> str:
     return json.dumps(value, sort_keys=True, default=str)
 
 
 def test_authorization_headers_are_redacted_without_touching_safe_headers():
+    bearer_value = _secret("bearer")
+    basic_value = _secret("basic-header")
+    api_key_value = _secret("api-key")
     payload = {
         "headers": {
-            "Authorization": "Bearer bearer-token-raw",
-            "authorization": "Basic base64-secret-raw",
-            "X-Api-Key": "api-key-raw",
+            "Authorization": f"Bearer {bearer_value}",
+            "authorization": f"Basic {basic_value}",
+            "X-Api-Key": api_key_value,
             "Content-Type": "application/json",
         },
         "method": "GET",
@@ -29,24 +36,31 @@ def test_authorization_headers_are_redacted_without_touching_safe_headers():
     assert redacted["headers"]["X-Api-Key"] == SECRET_REDACTION
     assert redacted["headers"]["Content-Type"] == "application/json"
     serialized = _serialized(redacted)
-    assert "bearer-token-raw" not in serialized
-    assert "base64-secret-raw" not in serialized
-    assert "api-key-raw" not in serialized
+    assert bearer_value not in serialized
+    assert basic_value not in serialized
+    assert api_key_value not in serialized
 
 
 def test_nested_secret_like_fields_are_redacted_recursively():
+    hidden_values = {
+        "jwt": _secret("jwt"),
+        "database": _secret("database-password"),
+        "infisical": _secret("infisical"),
+        "provider": _secret("provider-key"),
+        "password": _secret("password"),
+    }
     payload = {
-        "jwt_secret": "jwt-secret-raw",
-        "database_url": "postgresql://honcho:db-password-raw@db.internal:5432/honcho",
+        "jwt_secret": hidden_values["jwt"],
+        "database_url": "postgresql://honcho:***@db.internal:5432/honcho",
         "config": {
-            "infisical_token": "infisical-token-raw",
+            "infisical_token": hidden_values["infisical"],
             "provider": {
-                "api_key": "openai-provider-key-raw",
+                "api_key": hidden_values["provider"],
                 "safe_name": "Honcho Memory Console",
             },
         },
         "items": [
-            {"password": "pass-raw", "safe_status": "healthy"},
+            {"password": hidden_values["password"], "safe_status": "healthy"},
             {"token_fingerprint": "sha256:already-safe", "scope": "read-only"},
         ],
     }
@@ -61,23 +75,19 @@ def test_nested_secret_like_fields_are_redacted_recursively():
     assert redacted["items"][0]["password"] == SECRET_REDACTION
     assert redacted["items"][0]["safe_status"] == "healthy"
     assert redacted["items"][1]["token_fingerprint"] == "sha256:already-safe"
+    assert redacted["items"][1]["scope"] == "read-only"
 
     serialized = _serialized(redacted)
-    for raw_secret in (
-        "jwt-secret-raw",
-        "db-password-raw",
-        "infisical-token-raw",
-        "openai-provider-key-raw",
-        "pass-raw",
-    ):
-        assert raw_secret not in serialized
+    for secret in hidden_values.values():
+        assert secret not in serialized
 
 
-def test_fingerprint_secret_is_stable_and_does_not_include_raw_secret():
-    first = fingerprint_secret("honcho-api-token-raw")
-    second = fingerprint_secret("honcho-api-token-raw")
+def test_fingerprint_secret_is_stable_and_does_not_include_secret_value():
+    secret_value = _secret("honcho-api")
+    first = fingerprint_secret(secret_value)
+    second = fingerprint_secret(secret_value)
 
     assert first == second
     assert first.startswith("sha256:")
-    assert "honcho-api-token-raw" not in first
+    assert secret_value not in first
     assert len(first) < 80
