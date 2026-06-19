@@ -196,6 +196,41 @@ Closure note:
 - Unrelated T05 shell screenshot side effects created by the earlier full `npm run smoke` were restored to the previously committed T05 evidence so this rework remains scoped to T07.
 - This rework records only local implementation/browser-smoke evidence and branch hygiene. Sandbox/deploy/delivery evidence remains pending T10/T11/T11B by the canonical project contract.
 
+## T08 Memory Explorer UX and Integration Evidence
+
+Scope: `honcho-memory-console-t08-memory-explorer-ux-and-integration`.
+Evidence updated: `2026-06-19T15:08:23Z`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ/console/frontend`:
+
+- RED/rework reproduction: `npm test` -> frontend contract suites had `3` failing T08 checks: missing `src/lib/memory.ts`, missing Memory explorer UI labels, and missing explicit `memoryExplorerFixture`.
+- `npm ci` -> `added 31 packages`, `found 0 vulnerabilities`.
+- `npm test` -> frontend contract suites `11 passed`, `0 failed`, duration `145.304379ms` after implementation.
+- `npm run build` -> TypeScript + Vite production build passed; `24 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset; built in `209ms`.
+- `npm run smoke -- smoke/memory-explorer.spec.ts` -> Playwright/Chromium Memory explorer smoke passed `1 passed (9.9s)` with backend `/api/memory` route fixtures, desktop/mobile screenshots, clean console/page-error checks, filter interaction, peer-context disclosure, and sensitive message disclosure.
+- `npm run smoke` -> Playwright/Chromium frontend smoke suite passed `3 passed (13.6s)` across Health cockpit, Memory explorer, and shell navigation after updating the shell smoke route fixture for the new Memory explorer.
+- `uv run --frozen pytest console/backend/tests/test_honcho_memory_adapters.py -q` -> `4 passed in 5.94s`.
+- `git diff --check` -> exit `0`, no whitespace errors.
+- Frontend protected-value source scan over `console/frontend/src` for `Bearer|rawToken|password|Authorization|eyJ...` -> `total_count: 0`.
+
+UI/browser evidence paths:
+
+- Desktop Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/desktop-memory-explorer.png` (`1440x1727`, sha256 `2527534c51a1847d89c4f5fdac854403977507e87957e32ccc9c867584270bb0`).
+- Mobile Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/mobile-memory-explorer.png` (`390x3655`, sha256 `e1f759e7585a266bfa70283bc2aa78c8f80d38200040b1ec0e3e40b561cad141`).
+- Playwright smoke source: `console/frontend/smoke/memory-explorer.spec.ts`.
+
+Coverage notes:
+
+- Memory page now fetches the canonical console backend memory endpoints for workspaces, workspace queue, peers, peer card, representation, peer context, sessions, session messages, and conclusions through a typed `src/lib/memory.ts` client.
+- The UX exposes Workspace explorer, Peers, Peer card, Representation, Context, Sessions, Messages, and Conclusions surfaces with live/fixture source labeling, filter input, accessible empty states, and explicit refresh control.
+- Sensitive message content remains hidden by default; Playwright verifies the preview is absent until the operator clicks `Reveal sensitive content for msg-1`.
+- Peer representation/context text stays behind an explicit `Reveal peer context` disclosure before becoming visible.
+- Search/filter interaction is covered by Playwright: filtering `Zeus` keeps the peer visible and hides an unrelated conclusion row.
+
+Waivers / pending by phase contract:
+
+- T08 is local implementation plus browser smoke for the Memory explorer. Public sandbox URL, sandbox deploy path, docker compose deployment evidence, auth-bound deployed browser QA, and post-deploy browser/API verification remain pending T10/T11/T11B. No delivery/critical-readiness gate should be marked passed from this local T08 evidence alone.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.

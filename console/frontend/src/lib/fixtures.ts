@@ -1,4 +1,4 @@
-import type { AgentRow, HealthCheck, HealthServicesSnapshot, WorkspaceSummaryRow } from './types';
+import type { AgentRow, HealthCheck, HealthServicesSnapshot, MemoryExplorerSnapshot, WorkspaceSummaryRow } from './types';
 
 const now = new Date('2026-06-19T16:20:00.000Z').toISOString();
 const earlier = new Date('2026-06-19T15:51:00.000Z').toISOString();
@@ -189,6 +189,77 @@ export const workspacesFixture: WorkspaceSummaryRow[] = [
   { workspace: 'bael-lab', peers: 3, sessions: 9, conclusions: 27, lastActivityAt: '2026-06-18T19:42:00.000Z' },
   { workspace: 'console-smoke', peers: 2, sessions: 4, conclusions: 16, lastActivityAt: '2026-06-17T13:20:00.000Z' },
 ];
+
+export const memoryExplorerFixture: MemoryExplorerSnapshot = {
+  source: 'fixture',
+  loadedAt: now,
+  selectedWorkspaceId: 'hermes',
+  selectedPeerId: 'Zeus',
+  selectedSessionId: 'session-fixture',
+  workspaces: [
+    { id: 'hermes', metadata: { owner: 'Jean', tier: 'prod' }, configurationKeys: ['deriver'], createdAt: now },
+    { id: 'console-lab', metadata: { owner: 'QA' }, configurationKeys: [], createdAt: '2026-06-18T16:00:00.000Z' },
+  ],
+  queue: {
+    totalWorkUnits: 12,
+    completedWorkUnits: 8,
+    inProgressWorkUnits: 1,
+    pendingWorkUnits: 3,
+    sessions: {
+      'session-fixture': { totalWorkUnits: 4, completedWorkUnits: 3, inProgressWorkUnits: 0, pendingWorkUnits: 1 },
+    },
+  },
+  peers: [
+    { id: 'Zeus', workspaceId: 'hermes', metadata: { role: 'orchestrator' }, configurationKeys: ['observe_me'], createdAt: now },
+    { id: 'Jean-Garcia', workspaceId: 'hermes', metadata: { role: 'human' }, configurationKeys: [], createdAt: earlier },
+  ],
+  peerCard: {
+    total: 2,
+    entries: [
+      { index: 0, text: 'Prefers concise factory evidence.', sensitive: false },
+      { index: 1, text: 'Sensitive peer-card detail is redacted by default.', sensitive: true },
+    ],
+  },
+  representation: {
+    representation: 'Operator representation is available after explicit peer-context disclosure.',
+    sensitive: false,
+  },
+  context: {
+    peerId: 'Zeus',
+    targetId: 'Jean-Garcia',
+    representation: 'Context links factory handoffs to concise Spanish summaries.',
+    peerCard: [{ index: 0, text: 'Use evidence-backed summaries.', sensitive: false }],
+    sensitive: false,
+  },
+  sessions: [
+    { id: 'session-fixture', workspaceId: 'hermes', isActive: true, metadata: { topic: 'memory explorer' }, configurationKeys: ['summary'], createdAt: now },
+  ],
+  messages: [
+    {
+      id: 'msg-fixture',
+      workspaceId: 'hermes',
+      sessionId: 'session-fixture',
+      peerId: 'Jean-Garcia',
+      metadata: { channel: 'factory' },
+      createdAt: now,
+      tokenCount: 42,
+      contentHidden: true,
+      contentPreview: 'Sensitive message preview is displayed only after disclosure.',
+      sensitive: true,
+    },
+  ],
+  conclusions: [
+    {
+      id: 'conclusion-fixture',
+      observerId: 'Zeus',
+      observedId: 'Jean-Garcia',
+      sessionId: 'session-fixture',
+      createdAt: now,
+      contentPreview: 'Jean values evidence-backed Factory work.',
+      sensitive: false,
+    },
+  ],
+};
 
 export const telemetryFixture = [
   { label: 'Requests', current: 812, unit: '24h', delta: 18, points: [12, 18, 15, 28, 34, 31, 44, 52] },
