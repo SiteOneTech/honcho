@@ -176,6 +176,26 @@ async def test_honcho_api_adapter_fetches_memory_surfaces_and_sanitizes_data():
                     ]
                 ),
             )
+        if request.method == "POST" and path == "/v3/workspaces/hermes/conclusions/query":
+            body = json.loads(request.content.decode())
+            assert body == {
+                "query": "SitioUno",
+                "top_k": 3,
+                "filters": {"observer_id": "Zeus"},
+            }
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "query-conclusion-1",
+                        "content": f"semantic result includes {RAW_TOKEN}",
+                        "observer_id": "Zeus",
+                        "observed_id": "Jean",
+                        "session_id": "session-a",
+                        "created_at": "2026-06-19T00:05:00Z",
+                    }
+                ],
+            )
         raise AssertionError(f"unexpected request: {request.method} {path}")
 
     client = httpx.AsyncClient(
@@ -194,6 +214,12 @@ async def test_honcho_api_adapter_fetches_memory_surfaces_and_sanitizes_data():
     sessions = await adapter.list_sessions("hermes")
     messages = await adapter.list_messages("hermes", "session-a")
     conclusions = await adapter.list_conclusions("hermes")
+    queried_conclusions = await adapter.query_conclusions(
+        "hermes",
+        query="SitioUno",
+        filters={"observer_id": "Zeus"},
+        top_k=3,
+    )
 
     assert health.status == "healthy"
     assert workspaces.items[0].id == "hermes"
@@ -209,6 +235,8 @@ async def test_honcho_api_adapter_fetches_memory_surfaces_and_sanitizes_data():
     assert messages.items[0].content_preview is None
     assert messages.items[0].metadata["authorization"] == "[REDACTED]"
     assert conclusions.items[0].content_preview == "Jean owns SitioUno and [REDACTED]"
+    assert queried_conclusions.total == 1
+    assert queried_conclusions.items[0].content_preview == "semantic result includes [REDACTED]"
     assert all(header == f"Bearer {RAW_TOKEN}" for header in seen_authorizations)
     _assert_no_raw_secrets(
         [
@@ -222,6 +250,7 @@ async def test_honcho_api_adapter_fetches_memory_surfaces_and_sanitizes_data():
             sessions.model_dump(mode="json"),
             messages.model_dump(mode="json"),
             conclusions.model_dump(mode="json"),
+            queried_conclusions.model_dump(mode="json"),
         ]
     )
 
@@ -251,6 +280,14 @@ def test_console_memory_endpoints_return_typed_sanitized_payloads():
             return httpx.Response(200, json=_page([{"id": "msg-1", "workspace_id": "hermes", "session_id": "session-a", "peer_id": "Jean", "content": f"private {RAW_TOKEN}", "created_at": "2026-06-19T00:03:00Z", "token_count": 7}]))
         if request.method == "POST" and path == "/v3/workspaces/hermes/conclusions/list":
             return httpx.Response(200, json=_page([{"id": "conclusion-1", "content": f"conclusion {RAW_TOKEN}", "observer_id": "Zeus", "observed_id": "Jean", "created_at": "2026-06-19T00:04:00Z"}]))
+        if request.method == "POST" and path == "/v3/workspaces/hermes/conclusions/query":
+            body = json.loads(request.content.decode())
+            assert body == {
+                "query": "SitioUno",
+                "top_k": 2,
+                "filters": {"observed_id": "Jean"},
+            }
+            return httpx.Response(200, json=_page([{"id": "query-conclusion-1", "content": f"query result {RAW_TOKEN}", "observer_id": "Zeus", "observed_id": "Jean", "created_at": "2026-06-19T00:05:00Z"}]))
         raise AssertionError(f"unexpected request: {request.method} {path}")
 
     upstream_client = httpx.AsyncClient(
@@ -271,6 +308,15 @@ def test_console_memory_endpoints_return_typed_sanitized_payloads():
         client.get("/api/memory/workspaces/hermes/sessions", headers=_basic_auth()),
         client.get("/api/memory/workspaces/hermes/sessions/session-a/messages", headers=_basic_auth()),
         client.get("/api/memory/workspaces/hermes/conclusions", headers=_basic_auth()),
+        client.post(
+            "/api/memory/workspaces/hermes/conclusions/query",
+            headers=_basic_auth(),
+            json={
+                "query": "SitioUno",
+                "filters": {"observed_id": "Jean"},
+                "top_k": 2,
+            },
+        ),
     ]
 
     assert [response.status_code for response in responses] == [200] * len(responses)
@@ -280,6 +326,7 @@ def test_console_memory_endpoints_return_typed_sanitized_payloads():
     assert bodies[8]["items"][0]["content_hidden"] is True
     assert bodies[8]["items"][0]["content_preview"] is None
     assert bodies[9]["items"][0]["content_preview"] == "conclusion [REDACTED]"
+    assert bodies[10]["items"][0]["content_preview"] == "query result [REDACTED]"
     _assert_no_raw_secrets(bodies)
 
 
