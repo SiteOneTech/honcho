@@ -51,6 +51,47 @@ class ConsoleSettings(BaseSettings):
     database_url: SecretStr | None = None
     infisical_token: SecretStr | None = None
 
+    # --- Agent registry / fleet discovery ------------------------------------
+    # Fleet registry credentials stay server-side. The browser sees only whether
+    # the adapter is configured plus a fingerprint for operational correlation.
+    fleet_registry_database_url: SecretStr | None = None
+    fleet_registry_connect_timeout_seconds: int = 2
+    fleet_registry_agent_query: str = """
+SELECT
+    agent_id,
+    display_name,
+    tenant_id,
+    runtime_vm,
+    tailnet_ip,
+    environment,
+    honcho_workspace,
+    ai_peer,
+    human_peer,
+    token_fingerprint,
+    token_scope,
+    token_status,
+    last_write_at,
+    memory_counts,
+    queue_state,
+    api_activity,
+    vm_health,
+    alerts
+FROM factory.agent_registry
+WHERE active IS DISTINCT FROM false
+ORDER BY agent_id
+""".strip()
+
+    # Honcho/config fallback identity for deployments without fleet registry.
+    agent_id: str = "zeus"
+    agent_display_name: str = "Zeus"
+    tenant_id: str = "sitiouno-jean"
+    runtime_vm: str = "honcho-memory-prod"
+    tailnet_ip: str | None = None
+    environment: str = "production"
+    honcho_workspace: str = "hermes"
+    ai_peer: str | None = "Zeus"
+    human_peer: str | None = "Jean-Garcia"
+
     # --- Downstream LLM provider keys ----------------------------------------
     provider_api_keys: dict[str, SecretStr | None] = Field(default_factory=dict)
 
@@ -83,6 +124,23 @@ class ConsoleSettings(BaseSettings):
                 "token_configured": token is not None,
                 "token_fingerprint": (
                     fingerprint_secret(token) if token is not None else None
+                ),
+            },
+            "agent_registry": {
+                "agent_id": self.agent_id,
+                "display_name": self.agent_display_name,
+                "tenant_id": self.tenant_id,
+                "runtime_vm": self.runtime_vm,
+                "tailnet_ip": self.tailnet_ip,
+                "environment": self.environment,
+                "honcho_workspace": self.honcho_workspace,
+                "ai_peer": self.ai_peer,
+                "human_peer": self.human_peer,
+                "fleet_registry_configured": self.fleet_registry_database_url is not None,
+                "fleet_registry_fingerprint": (
+                    fingerprint_secret(self.fleet_registry_database_url)
+                    if self.fleet_registry_database_url is not None
+                    else None
                 ),
             },
             "secrets": {

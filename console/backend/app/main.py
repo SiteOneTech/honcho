@@ -12,6 +12,8 @@ Route map:
 * ``GET /healthz``       — unauthenticated liveness probe.
 * ``GET /api/settings``  — sanitized runtime configuration (auth required).
 * ``GET /api/overview``  — scaffold operational overview (auth required).
+* ``GET /api/agents``    — sanitized agent/token registry (auth required).
+* ``GET /api/agents/{agent_id}`` — sanitized agent detail (auth required).
 * ``GET /api/audit/events`` — scaffold audit feed (auth required).
 """
 
@@ -19,21 +21,31 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
+from console.backend.app.adapters.agent_registry import AgentRegistryService
+from console.backend.app.adapters.fleet_registry import FleetRegistryClient
 from console.backend.app.auth import BasicAuthMiddleware
+from console.backend.app.models import AgentDetailResponse, AgentRegistrySummaryResponse
 from console.backend.app.redaction import redact_sensitive
 from console.backend.app.settings import ConsoleSettings
 
 __all__ = ["create_app", "app"]
 
 
-def create_app(settings: ConsoleSettings | None = None) -> FastAPI:
+def create_app(
+    settings: ConsoleSettings | None = None,
+    *,
+    fleet_registry_adapter: FleetRegistryClient | None = None,
+) -> FastAPI:
     """Build a console backend application.
 
     Args:
         settings: explicit configuration. When ``None``, settings are loaded from
             the environment (``HONCHO_CONSOLE__*``) with safe defaults.
+        fleet_registry_adapter: optional read-only fleet adapter override used by
+            tests and future composition code. When omitted, the default Postgres
+            adapter is created from settings.
 
     Returns:
         A configured :class:`fastapi.FastAPI` instance with Basic Auth enforced on
@@ -48,6 +60,10 @@ def create_app(settings: ConsoleSettings | None = None) -> FastAPI:
         description="Operator console for inspecting Honcho memory state.",
     )
     application.state.settings = settings
+    application.state.agent_registry = AgentRegistryService(
+        settings,
+        fleet_registry_adapter=fleet_registry_adapter,
+    )
     application.add_middleware(BasicAuthMiddleware, settings=settings)
 
     @application.get("/healthz", tags=["health"])
@@ -83,6 +99,34 @@ def create_app(settings: ConsoleSettings | None = None) -> FastAPI:
             },
         }
         return redact_sensitive(payload)
+
+    @application.get("/api/agents", tags=["console"])
+    def get_agents() -> dict[str, Any]:
+        """Return sanitized agent registry rows for the Agents table."""
+
+        result = application.state.agent_registry.list_agents()
+        response = AgentRegistrySummaryResponse(
+            status="degraded" if result.alerts else "ok",
+            total=len(result.agents),
+            agents=result.agents,
+            alerts=result.alerts,
+        )
+        return redact_sensitive(response.model_dump(mode="json"))
+
+    @application.get("/api/agents/{agent_id}", tags=["console"])
+    def get_agent(agent_id: str) -> dict[str, Any]:
+        """Return one sanitized agent registry row by stable agent id."""
+
+        result = application.state.agent_registry.list_agents()
+        agent = next((item for item in result.agents if item.agent_id == agent_id), None)
+        if agent is None:
+            raise HTTPException(status_code=404, detail="Agent not found.")
+        response = AgentDetailResponse(
+            status="degraded" if result.alerts else "ok",
+            agent=agent,
+            alerts=result.alerts,
+        )
+        return redact_sensitive(response.model_dump(mode="json"))
 
     @application.get("/api/audit/events", tags=["console"])
     def get_audit_events() -> dict[str, Any]:
