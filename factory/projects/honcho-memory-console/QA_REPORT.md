@@ -81,10 +81,42 @@ Waivers / pending by phase contract:
 
 - T03 remains backend API/model work only; browser QA, screenshots, sandbox URL, deployed service permission checks, and final security review remain pending T10/T11/T11B/T09S.
 
+## T05 Premium Frontend Shell Evidence
+
+Scope: `honcho-memory-console-t05-premium-frontend-shell-and-design-sy`.
+Evidence updated: `2026-06-19T07:54:31-04:00`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-060-t05-premium-frontend-shell-and-d` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-060-t05-premium-frontend-shell-and-d/console/frontend`:
+
+- RED/rework reproduction: `node --test console/frontend/tests/shell-contract.test.mjs` -> failed before fix with missing `src/App.tsx`, missing `src/components/StatePanels.tsx`, and fixture text matching the raw-token guard.
+- `npm run typecheck` -> `tsc --noEmit` passed.
+- `npm run test` -> `5 passed`, `0 failed`, duration `131.243709ms`.
+- `npm run build` -> Vite `8.0.16` production build passed; generated `dist/index.html`, CSS asset, and JS asset; `22 modules transformed`, built in `223ms`.
+- `CI=1 npm run smoke` -> Playwright/Chrome passed `1 passed (8.3s)`.
+- `npm audit --json` -> `0` total vulnerabilities.
+- `uv run --frozen pytest console/backend/tests -q` -> `23 passed in 6.67s` after merging current `origin/main` into the T05 worktree.
+- `search_files` over `console/frontend/src`, `console/frontend/tests`, and `console/frontend/smoke` for `Bearer|rawToken|password|secret|Authorization|eyJ...` markers -> `total_count: 0` for each path.
+
+UI/browser evidence paths:
+
+- Desktop screenshot: `factory/projects/honcho-memory-console/evidence/t05-premium-frontend-shell/desktop-premium-shell.png` (`165754` bytes, valid PNG signature).
+- Mobile screenshot: `factory/projects/honcho-memory-console/evidence/t05-premium-frontend-shell/mobile-memory-shell.png` (`97884` bytes, valid PNG signature).
+- Playwright smoke test source: `console/frontend/smoke/shell.spec.ts`.
+
+Coverage notes:
+
+- Frontend scaffold now includes Vite/React/TypeScript entrypoint, app shell, design tokens, light/dark theme toggle, typed fixture data, contract tests, and browser smoke.
+- Shell navigation covers Overview, Agents, Memory, Health, Telemetry, Audit, and Settings.
+- UI includes a fixture-only banner, explicit status labels, skeleton, empty and error states, accessible focus/focus-visible token styling, live-region status text, mobile navigation flow, and one custom icon system.
+- Playwright smoke validates desktop render, mobile render, core navigation interaction, theme toggle, clean console/page-error checks, and screenshot capture.
+
+Waivers / pending by phase contract:
+
+- T05 is local implementation and browser QA for the frontend shell only. Public sandbox URL, sandbox deploy path, docker compose evidence, and post-deploy browser/API verification remain pending T10/T11/T11B. No delivery/critical-readiness gate should be marked passed from this local T05 evidence alone.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
-- Frontend build/type/lint output.
 - API smoke output after deployment packaging.
 - Browser/Playwright evidence against deployed console.
-- Screenshots or trace paths.
+- Public sandbox URL and screenshots from deployed console.
