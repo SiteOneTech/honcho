@@ -11,6 +11,7 @@ Repo-managed FastAPI scaffold for the private Honcho Memory Console.
 - Browser-safe configuration is exposed only through `ConsoleSettings.public_config()`, which returns booleans and `sha256:` fingerprints.
 - `redact_sensitive()` is the defense-in-depth sanitizer for Authorization headers and secret-like fields; token `scope` and `status` are explicitly safe because they are metadata, not credentials.
 - `GET /api/agents` and `GET /api/agents/{agent_id}` return only token fingerprints/scope/status — never raw token values.
+- `GET /api/health/services` runs only fixed, allowlisted local checks and returns sanitized evidence; it never accepts command names or shell fragments from the browser.
 
 ## Runtime settings
 
@@ -27,10 +28,19 @@ Optional server-side integrations:
 - `HONCHO_CONSOLE__HONCHO_API_TOKEN`
 - `HONCHO_CONSOLE__JWT_SECRET`
 - `HONCHO_CONSOLE__DATABASE_URL`
+- `HONCHO_CONSOLE__REDIS_URL`
 - `HONCHO_CONSOLE__INFISICAL_TOKEN`
 - `HONCHO_CONSOLE__FLEET_REGISTRY_DATABASE_URL`
 - `HONCHO_CONSOLE__FLEET_REGISTRY_CONNECT_TIMEOUT_SECONDS`
 - `HONCHO_CONSOLE__FLEET_REGISTRY_AGENT_QUERY` (read-only `SELECT`, defaults to `factory.agent_registry`)
+
+Local health adapter knobs are allowlisted and should normally keep defaults:
+
+- `HONCHO_CONSOLE__LOCAL_HEALTH_SYSTEMD_UNITS` (`honcho.service`, `honcho-admin.service`, `honcho-console.service`)
+- `HONCHO_CONSOLE__LOCAL_HEALTH_UPDATE_TIMER_UNIT` (`honcho-update.timer`)
+- `HONCHO_CONSOLE__LOCAL_HEALTH_DOCKER_COMPOSE_DIRECTORY`
+- `HONCHO_CONSOLE__LOCAL_HEALTH_DOCKER_SERVICES` (`api`, `deriver`, `database`, `redis`, `console`)
+- `HONCHO_CONSOLE__LOCAL_HEALTH_DISK_PATHS` (`/`, `/opt/honcho`, `/var/lib/docker/volumes`)
 
 Agent fallback identity when fleet registry is unset or unavailable:
 
