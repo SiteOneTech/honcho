@@ -24,7 +24,10 @@ from console.backend.app.adapters.fleet_registry import (
     FleetRegistryAdapter,
     FleetRegistryClient,
 )
-from console.backend.app.adapters.token_fingerprint import derive_token_info
+from console.backend.app.adapters.token_fingerprint import (
+    derive_token_info,
+    is_canonical_fingerprint,
+)
 from console.backend.app.models import (
     AgentApiActivity,
     AgentRegistryEntry,
@@ -141,11 +144,12 @@ class AgentRegistryService:
 
     def _fleet_row_to_entry(self, row: Mapping[str, Any]) -> AgentRegistryEntry:
         workspace = _as_str(row.get("honcho_workspace")) or self._settings.honcho_workspace
-        token_info = _token_info_from_registry_row(
+        token_info, token_alerts = _token_info_from_registry_row(
             row,
             expected_workspace=workspace,
             signing_secret=_secret_or_none(self._settings.jwt_secret),
         )
+        alerts = _alerts(row.get("alerts"))
 
         return AgentRegistryEntry(
             agent_id=_required_str(row, "agent_id"),
@@ -165,7 +169,7 @@ class AgentRegistryService:
             queue_state=_queue_state(row),
             api_activity=_api_activity(row),
             vm_health=_vm_health(row),
-            alerts=_alerts(row.get("alerts")),
+            alerts=[*alerts, *token_alerts],
             sources=["fleet_registry"],
         )
 
@@ -211,19 +215,47 @@ def _fleet_unavailable_alert() -> RegistryAlert:
 
 def _token_info_from_registry_row(
     row: Mapping[str, Any], *, expected_workspace: str | None, signing_secret: str | None
-) -> TokenInfo:
+) -> tuple[TokenInfo, list[AlertValue]]:
     raw_token = next((row.get(key) for key in _TOKEN_VALUE_KEYS if row.get(key)), None)
     if raw_token:
-        return derive_token_info(
-            raw_token,
-            expected_workspace=expected_workspace,
-            signing_secret=signing_secret,
+        return (
+            derive_token_info(
+                raw_token,
+                expected_workspace=expected_workspace,
+                signing_secret=signing_secret,
+            ),
+            [],
         )
 
-    return TokenInfo(
-        fingerprint=_as_str(row.get("token_fingerprint")),
-        scope=_as_str(row.get("token_scope")) or "unknown",
-        status=_token_status_or_unknown(row.get("token_status")),
+    token_fingerprint = _as_str(row.get("token_fingerprint"))
+    if token_fingerprint is None:
+        return (
+            TokenInfo(
+                scope=_as_str(row.get("token_scope")) or "unknown",
+                status=_token_status_or_unknown(row.get("token_status")),
+            ),
+            [],
+        )
+
+    if is_canonical_fingerprint(token_fingerprint):
+        return (
+            TokenInfo(
+                fingerprint=token_fingerprint,
+                scope=_as_str(row.get("token_scope")) or "unknown",
+                status=_token_status_or_unknown(row.get("token_status")),
+            ),
+            [],
+        )
+
+    return (
+        TokenInfo(),
+        [
+            RegistryAlert(
+                code="fleet_registry_token_fingerprint_invalid",
+                message="Fleet registry token_fingerprint was rejected because it was not a canonical sha256 fingerprint.",
+                source="fleet_registry",
+            )
+        ],
     )
 
 

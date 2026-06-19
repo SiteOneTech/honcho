@@ -7,6 +7,7 @@ return the raw token or any signature material. The browser receives only a stab
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,7 +16,9 @@ import jwt
 from console.backend.app.models import TokenInfo, TokenStatus
 from console.backend.app.redaction import fingerprint_secret
 
-__all__ = ["derive_token_info"]
+__all__ = ["derive_token_info", "is_canonical_fingerprint"]
+
+_CANONICAL_FINGERPRINT = re.compile(r"^sha256:[0-9a-f]{16,64}$")
 
 
 def derive_token_info(
@@ -50,6 +53,14 @@ def derive_token_info(
     scope = _scope_from_claims(claims)
     status = _status_from_claims(claims, expected_workspace=expected_workspace)
     return TokenInfo(fingerprint=fingerprint, scope=scope, status=status)
+
+
+def is_canonical_fingerprint(value: Any) -> bool:
+    """Return ``True`` only for browser-safe canonical SHA-256 fingerprints."""
+
+    if not isinstance(value, str):
+        return False
+    return _CANONICAL_FINGERPRINT.fullmatch(value) is not None
 
 
 def _secret_value(value: Any) -> str:
