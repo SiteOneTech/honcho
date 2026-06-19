@@ -12,6 +12,10 @@ Route map:
 * ``GET /healthz``       — unauthenticated liveness probe.
 * ``GET /api/settings``  — sanitized runtime configuration (auth required).
 * ``GET /api/overview``  — scaffold operational overview (auth required).
+* ``GET /api/memory/*``  — sanitized Honcho memory explorer data (auth required).
+* ``GET /api/agents``    — sanitized agent/token registry (auth required).
+* ``GET /api/agents/{agent_id}`` — sanitized agent detail (auth required).
+* ``GET /api/health/services`` — sanitized local service health (auth required).
 * ``GET /api/audit/events`` — scaffold audit feed (auth required).
 """
 
@@ -19,9 +23,11 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
 
+from console.backend.app.adapters.agent_registry import AgentRegistryService
+from console.backend.app.adapters.fleet_registry import FleetRegistryClient
 from console.backend.app.adapters.honcho_api import (
     ConclusionSummary,
     HonchoAPIAdapter,
@@ -38,7 +44,13 @@ from console.backend.app.adapters.honcho_api import (
     SessionSummary,
     WorkspaceSummary,
 )
+from console.backend.app.adapters.local_services import LocalServiceHealthAdapter
 from console.backend.app.auth import BasicAuthMiddleware
+from console.backend.app.models import (
+    AgentDetailResponse,
+    AgentRegistrySummaryResponse,
+    ServiceHealthResponse,
+)
 from console.backend.app.redaction import redact_sensitive
 from console.backend.app.settings import ConsoleSettings
 
@@ -49,6 +61,8 @@ def create_app(
     settings: ConsoleSettings | None = None,
     *,
     honcho_api_adapter: HonchoAPIAdapter | None = None,
+    fleet_registry_adapter: FleetRegistryClient | None = None,
+    local_health_adapter: Any | None = None,
 ) -> FastAPI:
     """Build a console backend application.
 
@@ -57,6 +71,11 @@ def create_app(
             the environment (``HONCHO_CONSOLE__*``) with safe defaults.
         honcho_api_adapter: optional adapter override used by tests to inject a
             mock local Honcho API client.
+        fleet_registry_adapter: optional read-only fleet adapter override used by
+            tests and future composition code. When omitted, the default Postgres
+            adapter is created from settings.
+        local_health_adapter: optional local health adapter override used by tests.
+            When omitted, the default safe adapter is created from settings.
 
     Returns:
         A configured :class:`fastapi.FastAPI` instance with Basic Auth enforced on
@@ -73,6 +92,13 @@ def create_app(
     )
     application.state.settings = settings
     application.state.honcho_api_adapter = adapter
+    application.state.agent_registry = AgentRegistryService(
+        settings,
+        fleet_registry_adapter=fleet_registry_adapter,
+    )
+    application.state.local_health = local_health_adapter or LocalServiceHealthAdapter(
+        settings
+    )
     application.add_middleware(BasicAuthMiddleware, settings=settings)
 
     @application.exception_handler(HonchoAPIUnavailable)
@@ -308,6 +334,41 @@ def create_app(
             filters=filters,
             top_k=top_k,
         )
+
+    @application.get("/api/agents", tags=["console"])
+    def get_agents() -> dict[str, Any]:
+        """Return sanitized agent registry rows for the Agents table."""
+
+        result = application.state.agent_registry.list_agents()
+        response = AgentRegistrySummaryResponse(
+            status="degraded" if result.alerts else "ok",
+            total=len(result.agents),
+            agents=result.agents,
+            alerts=result.alerts,
+        )
+        return redact_sensitive(response.model_dump(mode="json"))
+
+    @application.get("/api/agents/{agent_id}", tags=["console"])
+    def get_agent(agent_id: str) -> dict[str, Any]:
+        """Return one sanitized agent registry row by stable agent id."""
+
+        result = application.state.agent_registry.list_agents()
+        agent = next((item for item in result.agents if item.agent_id == agent_id), None)
+        if agent is None:
+            raise HTTPException(status_code=404, detail="Agent not found.")
+        response = AgentDetailResponse(
+            status="degraded" if result.alerts else "ok",
+            agent=agent,
+            alerts=result.alerts,
+        )
+        return redact_sensitive(response.model_dump(mode="json"))
+
+    @application.get("/api/health/services", tags=["health"])
+    def get_service_health() -> dict[str, Any]:
+        """Return sanitized local service and VM health checks."""
+
+        response: ServiceHealthResponse = application.state.local_health.collect()
+        return redact_sensitive(response.model_dump(mode="json"))
 
     @application.get("/api/audit/events", tags=["console"])
     def get_audit_events() -> dict[str, Any]:

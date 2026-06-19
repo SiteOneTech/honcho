@@ -1,1 +1,3 @@
-"""Adapters for backend integrations used by the console."""
+"""Adapters for the Honcho Memory Console backend."""
+
+from __future__ import annotations

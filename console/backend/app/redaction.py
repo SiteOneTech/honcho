@@ -70,6 +70,8 @@ _SAFE_KEY_PARTS: tuple[str, ...] = (
     "fingerprint",
     "configured",
     "enabled",
+    "scope",
+    "status",
     "redacted",
     "safe_",
     "_safe",
