@@ -605,6 +605,86 @@ table.data tbody tr:hover {
   max-width: 38ch;
 }
 
+.health-card--cockpit {
+  min-height: 100%;
+}
+
+.health-cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.health-cockpit__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.health-cockpit__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+
+.health-cockpit__summary {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.health-cockpit__notice {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-degraded) 45%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--color-degraded-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.health-row--rich {
+  align-items: flex-start;
+}
+
+.health-row__timestamp {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--color-text-faint);
+}
+
+.health-row__evidence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.health-row__evidence-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.evidence-pill {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
 /* ---- Sparkline ---------------------------------------------------------- */
 
 .spark {
