@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Icon, type IconName } from './components/Icon';
 import { EmptyState, ErrorState, Skeleton } from './components/StatePanels';
@@ -6,16 +6,24 @@ import {
   FIXTURE_META,
   agentsFixture,
   auditFixture,
-  healthChecksFixture,
+  healthSnapshotFixture,
   overviewFixture,
   providersFixture,
   telemetryFixture,
   workspacesFixture,
 } from './lib/fixtures';
-import { compactNumber, percent, relativeTime, sparklinePath, statusLabel } from './lib/format';
+import { absoluteTime, compactNumber, percent, relativeTime, sparklinePath, statusLabel } from './lib/format';
+import {
+  HEALTH_GROUPS,
+  fetchServiceHealth,
+  groupHealthChecks,
+  summarizeEvidence,
+  type HealthEvidencePill,
+  type HealthGroupId,
+} from './lib/health';
 import { navigate, type RouteId, useRoute } from './lib/router';
 import { applyTheme, readInitialTheme, type ThemeMode } from './lib/theme';
-import type { AgentRow, HealthCheck, HealthLayer, HealthStatus, TokenStatus } from './lib/types';
+import type { AgentRow, HealthCheck, HealthServicesSnapshot, HealthStatus, TokenStatus } from './lib/types';
 
 interface NavItem {
   id: RouteId;
@@ -92,15 +100,6 @@ const TOKEN_CLASS: Record<TokenStatus, string> = {
   expired: 'chip--down',
   'mis-scoped': 'chip--degraded',
   unknown: 'chip--unknown',
-};
-
-const LAYER_LABELS: Record<HealthLayer, string> = {
-  service: 'Service plane',
-  storage: 'Storage plane',
-  resource: 'Host resources',
-  network: 'Network',
-  config: 'Configuration',
-  update: 'Update loop',
 };
 
 function App() {
@@ -209,11 +208,13 @@ function App() {
             Viewing {active.label}: {active.description}
           </div>
 
-          <div className="fixture-banner">
+          <div className="fixture-banner" data-live-health={route === 'health' ? 'true' : 'false'}>
             <Icon name="alert" size={17} />
             <span>
-              <strong>Fixture-only shell.</strong> {FIXTURE_META.note} Backend integration lands in the next
-              increments.
+              <strong>{route === 'health' ? 'Live health integration.' : 'Fixture-supported shell.'}</strong>{' '}
+              {route === 'health'
+                ? 'The Health cockpit queries /api/health/services and falls back to an explicit offline state when the backend cannot be reached.'
+                : FIXTURE_META.note}
             </span>
           </div>
 
@@ -461,34 +462,114 @@ function WorkspaceRow({ workspace }: { workspace: (typeof workspacesFixture)[num
 }
 
 function HealthPage() {
-  const grouped = useMemo(() => groupByLayer(healthChecksFixture), []);
+  const [snapshot, setSnapshot] = useState<HealthServicesSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadHealth = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const next = await fetchServiceHealth();
+      setSnapshot(next);
+    } catch {
+      setSnapshot(null);
+      setError('The backend health adapter is unavailable or requires a valid console login.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHealth();
+  }, [loadHealth]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={5} title="Health cockpit is loading live service status" />;
+  }
+
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Health cockpit offline" hint="Backend unavailable">
+        <ErrorState
+          title="Health backend unavailable"
+          description="The cockpit could not reach /api/health/services, so no live service evidence is displayed. Authenticate to the private console or retry from the deployed backend path."
+          actionLabel="Retry live health"
+          onAction={loadHealth}
+        />
+      </Panel>
+    );
+  }
+
+  const activeSnapshot = snapshot ?? healthSnapshotFixture;
+  const grouped = groupHealthChecks(activeSnapshot.checks);
+  const totals = healthTotals(activeSnapshot.checks);
+
   return (
-    <section className="grid grid--health" aria-label="Health checks by layer">
-      {Object.entries(grouped).map(([layer, checks]) => (
-        <div className="health-card" key={layer}>
-          <div className="health-card__head">
-            <div>
-              <div className="health-card__layer">{layer}</div>
-              <strong>{LAYER_LABELS[layer as HealthLayer] ?? layer}</strong>
-            </div>
-            <StatusChip status={worstStatus(checks)} />
+    <section className="health-cockpit" aria-label="Health checks by API, Deriver, Storage, Network, LLM, Update, and Host">
+      <div className="health-cockpit__toolbar">
+        <div>
+          <div className="health-cockpit__meta">
+            Source: {activeSnapshot.source === 'live' ? 'backend /api/health/services' : 'fixture fallback'} · Last checked{' '}
+            {absoluteTime(activeSnapshot.generatedAt)}
           </div>
-          {checks.map((check) => (
-            <HealthRow check={check} key={check.id} />
-          ))}
+          <div className="health-cockpit__summary">
+            {totals.total} checks · {totals.degraded} degraded · {totals.offline} offline · {totals.unknown} unknown
+          </div>
         </div>
-      ))}
+        <button className="button button--accent" type="button" onClick={loadHealth} disabled={isLoading}>
+          <Icon name="refresh" size={16} />
+          {isLoading ? 'Refreshing…' : 'Refresh live health'}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="health-cockpit__notice" role="status">
+          Live refresh degraded: {error}
+        </div>
+      ) : null}
+
+      <div className="grid grid--health">
+        {HEALTH_GROUPS.map((group) => (
+          <HealthGroupCard checks={grouped[group.id]} groupId={group.id} key={group.id} />
+        ))}
+      </div>
     </section>
   );
 }
 
-function groupByLayer(checks: HealthCheck[]): Partial<Record<HealthLayer, HealthCheck[]>> {
-  return checks.reduce<Partial<Record<HealthLayer, HealthCheck[]>>>((acc, check) => {
-    const layerChecks = acc[check.layer] ?? [];
-    layerChecks.push(check);
-    acc[check.layer] = layerChecks;
-    return acc;
-  }, {});
+function healthTotals(checks: HealthCheck[]): { total: number; degraded: number; offline: number; unknown: number } {
+  return {
+    total: checks.length,
+    degraded: checks.filter((check) => check.status === 'degraded').length,
+    offline: checks.filter((check) => check.status === 'down').length,
+    unknown: checks.filter((check) => check.status === 'unknown').length,
+  };
+}
+
+function HealthGroupCard({ groupId, checks }: { groupId: HealthGroupId; checks: HealthCheck[] }) {
+  const group = HEALTH_GROUPS.find((item) => item.id === groupId)!;
+  const status = checks.length === 0 ? 'unknown' : worstStatus(checks);
+  return (
+    <article className="health-card health-card--cockpit">
+      <div className="health-card__head">
+        <div>
+          <div className="health-card__layer">{group.description}</div>
+          <strong>{group.label}</strong>
+        </div>
+        <StatusChip status={status} />
+      </div>
+      {checks.length === 0 ? (
+        <EmptyState
+          title={`No ${group.label} checks reported`}
+          description="The backend response did not include a safe check for this cockpit group. This is shown as unknown rather than hidden."
+          icon="inbox"
+        />
+      ) : (
+        checks.map((check) => <HealthRow check={check} key={check.id} />)
+      )}
+    </article>
+  );
 }
 
 function worstStatus(checks: HealthCheck[]): HealthStatus {
@@ -499,13 +580,35 @@ function worstStatus(checks: HealthCheck[]): HealthStatus {
 }
 
 function HealthRow({ check }: { check: HealthCheck }) {
+  const evidence = check.safeToShow ? summarizeEvidence(check.evidence) : [];
   return (
-    <div className="health-row">
+    <div className="health-row health-row--rich">
       <div className="health-row__main">
         <div className="health-row__label">{check.label}</div>
         <div className="health-row__summary">{check.summary}</div>
+        <div className="health-row__timestamp">Last checked {absoluteTime(check.lastCheckedAt)}</div>
+        <EvidencePills evidence={evidence} />
       </div>
-      <StatusChip status={check.status} label={check.latencyMs === null ? statusLabel(check.status) : `${statusLabel(check.status)} · ${check.latencyMs}ms`} />
+      <StatusChip
+        status={check.status}
+        label={check.latencyMs === null ? statusLabel(check.status) : `${statusLabel(check.status)} · ${check.latencyMs}ms`}
+      />
+    </div>
+  );
+}
+
+function EvidencePills({ evidence }: { evidence: HealthEvidencePill[] }) {
+  if (evidence.length === 0) {
+    return <div className="health-row__evidence-label">Evidence: not shown by adapter</div>;
+  }
+  return (
+    <div className="health-row__evidence" aria-label="Evidence">
+      <span className="health-row__evidence-label">Evidence</span>
+      {evidence.map((item) => (
+        <span className="evidence-pill" key={`${item.label}:${item.value}`}>
+          {item.label}: {item.value}
+        </span>
+      ))}
     </div>
   );
 }

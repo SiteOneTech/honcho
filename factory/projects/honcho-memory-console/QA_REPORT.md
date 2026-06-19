@@ -136,6 +136,66 @@ Waivers / pending by phase contract:
 
 - Same as T05: public sandbox URL, sandbox deploy path, docker compose evidence, and post-deploy browser/API verification remain pending T10/T11/T11B. This rework only closes local verification plus commit/push hygiene for the T05 branch.
 
+## T07 Health Cockpit UX and Integration Evidence
+
+Scope: `honcho-memory-console-t07-health-cockpit-ux-and-integration`.
+Evidence updated: `2026-06-19T09:13:37-04:00`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-080-t07-health-cockpit-ux-and-integr` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-080-t07-health-cockpit-ux-and-integr/console/frontend`:
+
+- RED contract check: `npm test` initially failed with missing `src/lib/health.ts`, missing canonical Health cockpit backend integration, and missing `src/lib/fixtures.ts`.
+- GREEN contract check: `npm test` -> frontend contract suites `8 passed`, `0 failed`, duration `132.523093ms`.
+- `npm ci` -> `added 31 packages`, `found 0 vulnerabilities`.
+- `npm run build` -> TypeScript + Vite production build passed; `23 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset; built in `213ms`.
+- `npm run smoke` -> Playwright/Chrome passed `2 passed (9.8s)`, including the T07 Health cockpit smoke and existing shell smoke.
+- `uv run --frozen pytest console/backend/tests/test_local_services_health.py -q` -> `4 passed in 6.27s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `23 passed in 5.93s`.
+- Frontend protected-value source scan over `console/frontend/src` for `Bearer|rawToken|factory-generated|Authorization|eyJ...` -> `total_count: 0`.
+
+UI/browser evidence paths:
+
+- Desktop Health screenshot: `factory/projects/honcho-memory-console/evidence/t07-health-cockpit/desktop-health-cockpit.png` (`1440x1844`, sha256 `b957dbac159fe3fe708546f647d6c329bb5660ac99fec45d9f61e2923df2b57b`).
+- Mobile Health screenshot: `factory/projects/honcho-memory-console/evidence/t07-health-cockpit/mobile-health-cockpit.png` (`390x3326`, sha256 `6178e33328be101e64f5c2b078ae3c73055fcf0a9816815669f1b82d432c6910`).
+- Playwright smoke source: `console/frontend/smoke/health-cockpit.spec.ts`.
+
+Coverage notes:
+
+- Health page now fetches live `/api/health/services` from the console backend, normalizes backend `generated_at`, `last_checked_at`, `latency_ms`, `evidence`, and `safe_to_show` fields, and displays source/timestamp metadata.
+- Cockpit groups checks by canonical T07 categories: API, Deriver, Storage, Network, LLM, Update, and Host.
+- Docker compose aggregate evidence is expanded into per-service rows so `api`, `deriver`, `database`, `redis`, and `console` statuses appear in the right operational group when backend evidence includes service details.
+- UI displays degraded/offline/unknown states explicitly with text labels, evidence pills, and accessible loading/error/offline states without raw JSON-first rendering.
+- Frontend support modules under `console/frontend/src/lib/` are tracked explicitly despite the repo root Python `lib/` ignore rule.
+
+Waivers / pending by phase contract:
+
+- T07 is local implementation plus browser smoke for the Health cockpit. Public sandbox URL, sandbox deploy path, docker compose deployment evidence, auth-bound deployed browser QA, and post-deploy browser/API verification remain pending T10/T11/T11B. No delivery/critical-readiness gate should be marked passed from this local T07 evidence alone.
+
+## T07 Rework Closure Evidence - Commit/Push Hygiene
+
+Scope: `honcho-memory-console-t07-health-cockpit-ux-and-integration` rework after increment integration rejected the prior terminal status because the worktree still had uncommitted screenshot artifacts.
+Evidence updated: `2026-06-19T09:13:37-04:00`.
+
+Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-080-t07-health-cockpit-ux-and-integr` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-080-t07-health-cockpit-ux-and-integr/console/frontend`:
+
+- `npm test` -> frontend contract suites `8 passed`, `0 failed`, duration `134.090902ms`.
+- `npm run build` -> TypeScript + Vite production build passed; `23 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset; built in `201ms`.
+- `npm run smoke -- smoke/health-cockpit.spec.ts` -> Playwright/Chrome Health cockpit smoke passed `1 passed (7.7s)` and refreshed T07 desktop/mobile evidence screenshots.
+- `uv run --frozen pytest console/backend/tests/test_local_services_health.py -q` -> `4 passed in 5.03s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `23 passed in 5.14s`.
+- `git diff --check` -> exit `0`, no whitespace errors.
+- Frontend protected-value scan over `console/frontend/src` for `Bearer|rawToken|factory-generated|Authorization|eyJ...|api_key|secret|password|token` -> `total_count: 0`.
+- Frontend smoke protected-value scan found only the explicit negative assertion in `console/frontend/smoke/health-cockpit.spec.ts` line 144; no secret values are embedded.
+
+Updated UI/browser evidence paths:
+
+- Desktop Health screenshot: `factory/projects/honcho-memory-console/evidence/t07-health-cockpit/desktop-health-cockpit.png` (`1440x1844`, sha256 `b957dbac159fe3fe708546f647d6c329bb5660ac99fec45d9f61e2923df2b57b`).
+- Mobile Health screenshot: `factory/projects/honcho-memory-console/evidence/t07-health-cockpit/mobile-health-cockpit.png` (`390x3326`, sha256 `6178e33328be101e64f5c2b078ae3c73055fcf0a9816815669f1b82d432c6910`).
+
+Closure note:
+
+- Unrelated T05 shell screenshot side effects created by the earlier full `npm run smoke` were restored to the previously committed T05 evidence so this rework remains scoped to T07.
+- This rework records only local implementation/browser-smoke evidence and branch hygiene. Sandbox/deploy/delivery evidence remains pending T10/T11/T11B by the canonical project contract.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
