@@ -114,6 +114,28 @@ Waivers / pending by phase contract:
 
 - T05 is local implementation and browser QA for the frontend shell only. Public sandbox URL, sandbox deploy path, docker compose evidence, and post-deploy browser/API verification remain pending T10/T11/T11B. No delivery/critical-readiness gate should be marked passed from this local T05 evidence alone.
 
+## T05 Rework Closure Evidence - Commit/Push Hygiene
+
+Scope: `honcho-memory-console-t05-premium-frontend-shell-and-design-sy` rework after increment integration rejected the task because the worktree still had uncommitted screenshot artifacts.
+Evidence updated: `2026-06-19T08:17:06-04:00`.
+
+Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-060-t05-premium-frontend-shell-and-d` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-060-t05-premium-frontend-shell-and-d/console/frontend`:
+
+- `npm run typecheck && npm run test && npm run build && CI=1 npm run smoke` -> typecheck passed; frontend shell contract `5 passed`, `0 failed`; Vite production build passed with `22 modules transformed`; Playwright smoke passed `1 passed (8.3s)` and refreshed the browser evidence screenshots.
+- `uv run --frozen pytest console/backend/tests -q` -> `23 passed in 5.50s`.
+- `npm audit --json` -> `0` total vulnerabilities.
+- Frontend protected-value marker scan for `Bearer|rawToken|password|secret|Authorization|eyJ...` over `console/frontend` -> `total_count: 0`.
+- Browser smoke source `console/frontend/smoke/shell.spec.ts` keeps `console_error_check` and `page_error_check` assertions as empty arrays after desktop navigation/theme toggle and mobile Memory flow.
+
+Updated UI/browser evidence paths:
+
+- Desktop screenshot: `factory/projects/honcho-memory-console/evidence/t05-premium-frontend-shell/desktop-premium-shell.png` (`165484` bytes, PNG `1440x1000`, sha256 `8a99933789d0546d2a5b6e2a21b66507671114bb017ba1c3095a102715ee55f6`).
+- Mobile screenshot: `factory/projects/honcho-memory-console/evidence/t05-premium-frontend-shell/mobile-memory-shell.png` (`96998` bytes, PNG `540x1204`, sha256 `701a5f059188e0761f1b90ef6bcc98b9f9495bb4be33d54d697eb1c3c952ed7b`).
+
+Waivers / pending by phase contract:
+
+- Same as T05: public sandbox URL, sandbox deploy path, docker compose evidence, and post-deploy browser/API verification remain pending T10/T11/T11B. This rework only closes local verification plus commit/push hygiene for the T05 branch.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
