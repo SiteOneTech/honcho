@@ -257,6 +257,56 @@ Closure note:
 - This rework records local implementation/browser-smoke evidence plus branch hygiene for T08 only. The final diff is scoped to the T08 changelog line, Memory explorer QA report entry, and T08 screenshot evidence.
 - Sandbox URL, sandbox deploy path, docker compose deployment evidence, auth-bound deployed browser QA, and post-deploy browser/API verification remain pending T10/T11/T11B by the canonical project contract; no delivery/critical-readiness gate should be marked passed from this local T08 evidence alone.
 
+## T09 Token/API Telemetry and Audit Trail Evidence
+
+Scope: `honcho-memory-console-t09-token-api-telemetry-and-audit-trail`.
+Evidence updated: `2026-06-19T13:54:55Z`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-100-t09-token-api-telemetry-and-audi`:
+
+- RED regression check: `uv run pytest console/backend/tests/test_observability.py console/backend/tests/test_telemetry_audit_endpoints.py -q` -> failed before implementation with `ModuleNotFoundError: No module named 'console.backend.app.observability'` and `/api/telemetry` returning `404`; summary `2 failed, 1 error in 6.01s`.
+- GREEN targeted check: same command after implementation -> `5 passed in 5.56s`; final frozen rerun `uv run --frozen pytest console/backend/tests/test_observability.py console/backend/tests/test_telemetry_audit_endpoints.py -q` -> `5 passed in 5.27s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `28 passed in 5.21s`.
+- `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
+
+Coverage notes:
+
+- Added `/api/telemetry` fallback aggregation for console API traffic when upstream Honcho per-token metrics are unavailable. The recorder retains only method, sanitized route, status, timestamp, latency, token fingerprint, and token scope.
+- Replaced the scaffold `/api/audit/events` feed with retained audit events for console operations. The audit recorder API accepts only actor, action, outcome, route, method, and status code; it has no request/response body, header, authorization, raw token, or secret parameters.
+- Added Basic Auth-aware observability middleware so denied `401/403` API access is auditable as `actor="unknown"`/`outcome="denied"`, while authenticated operations are recorded as operator events.
+- Security regressions prove raw JWT/signing/basic-auth values do not serialize through telemetry or audit endpoints and that token attribution is fingerprint/scope only.
+
+Waivers / pending by phase contract:
+
+- T09 is backend telemetry/audit implementation only. Public sandbox URL, docker compose deployment evidence, browser screenshots, and deployed browser/API verification remain pending T10/T11/T11B. Independent security review remains pending T09S.
+
+## T09 Rework Evidence - Raw Path Sanitization
+
+Scope: `honcho-memory-console-t09-token-api-telemetry-and-audit-trail` rework after security gate 612.
+Evidence updated: `2026-06-19T16:49:47Z`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-100-t09-token-api-telemetry-and-audi`:
+
+- RED regression check: `uv run --frozen pytest console/backend/tests/test_observability.py::test_recorders_redact_secret_like_route_segments_even_when_given_raw_paths console/backend/tests/test_telemetry_audit_endpoints.py::test_unmatched_api_paths_are_collapsed_before_telemetry_or_audit_persistence console/backend/tests/test_telemetry_audit_endpoints.py::test_token_like_path_params_use_route_templates_not_raw_path_values -q` -> `2 failed, 1 passed in 5.21s` before the fix because raw JWT-like path segments reached telemetry/audit route/action fields.
+- GREEN targeted check: same command after fix -> `3 passed in 5.28s`.
+- `uv run --frozen pytest console/backend/tests/test_observability.py console/backend/tests/test_telemetry_audit_endpoints.py -q` -> `8 passed in 5.32s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `31 passed in 5.79s`.
+- `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
+- `git diff --check` -> exit 0, no whitespace output.
+
+Coverage notes:
+
+- Observability now resolves matched FastAPI route templates before persistence, including requests denied by Basic Auth before `scope["route"]` exists.
+- Unmatched `/api/*` requests are persisted as fixed `/api/unmatched` instead of raw attacker-controlled paths.
+- Recorder-level route sanitization strips query/fragment data and redacts JWT-like, long hash, and base64/base64url-like segments as defense in depth.
+- Regression tests cover authenticated and unauthenticated `/api/not-found/<synthetic-jwt>` requests, query-string token/secret values, and token-like values in matched `/api/agents/{agent_id}` path params.
+
+Waivers / pending by phase contract:
+
+- Same as T09: backend implementation only. Public sandbox URL, docker compose deployment evidence, browser screenshots, deployed browser/API verification, and independent security review remain pending T10/T11/T11B/T09S.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
