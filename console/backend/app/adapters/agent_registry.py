@@ -57,6 +57,26 @@ _TOKEN_VALUE_KEYS = (
     "Authorization",
 )
 
+# Fleet registry rows are not trusted to author browser-facing alert text. Only
+# these codes are allowed through, each rendered with a console-authored message;
+# any unrecognized code is suppressed (see ``_alerts``).
+_ALERT_MESSAGES: dict[str, str] = {
+    "queue_pending": "Queue has pending derivation work.",
+    "queue_degraded": "Queue processing is degraded.",
+    "queue_error": "Queue processing reported errors.",
+    "token_expired": "Honcho API token has expired.",
+    "token_mis_scoped": "Honcho API token is mis-scoped for its workspace.",
+    "vm_offline": "Runtime VM is offline.",
+    "vm_degraded": "Runtime VM health is degraded.",
+    "high_error_rate": "API error rate is elevated.",
+    "stale_last_write": "No recent writes were observed for this agent.",
+}
+
+_ALERT_SUPPRESSED_CODE = "fleet_registry_alert_suppressed"
+_ALERT_SUPPRESSED_MESSAGE = (
+    "An unrecognized fleet registry alert was suppressed by the console."
+)
+
 
 class AgentRegistryService:
     """Build sanitized agent rows from fleet registry and Honcho/config fallback."""
@@ -333,27 +353,63 @@ def _vm_health(row: Mapping[str, Any]) -> AgentVmHealth:
     )
 
 
-def _alerts(value: Any) -> list[str | RegistryAlert]:
+def _alerts(value: Any) -> list[RegistryAlert]:
+    """Convert untrusted registry alert payloads into canonical console alerts.
+
+    Fleet registry rows may not author browser-facing text. Free strings and any
+    external ``message``/``source`` fields are dropped; only an allowlisted
+    ``code`` survives, rendered with a console-authored message and
+    ``source='fleet_registry'``. Unknown codes collapse to a single suppressed
+    alert so no untrusted text can reach the browser.
+    """
+
     if value is None:
         return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, list):
-        alerts: list[str | RegistryAlert] = []
-        for item in value:
-            if isinstance(item, str):
-                alerts.append(item)
-            elif isinstance(item, Mapping):
-                alerts.append(
-                    RegistryAlert(
-                        code=_as_str(item.get("code")) or "registry_alert",
-                        message=_as_str(item.get("message")) or "Registry alert.",
-                        severity=_severity_or_warning(item.get("severity")),
-                        source=_as_str(item.get("source")),
-                    )
+    items = value if isinstance(value, list) else [value]
+    alerts: list[RegistryAlert] = []
+    for item in items:
+        if isinstance(item, str):
+            alerts.append(_canonical_alert(item))
+        elif isinstance(item, Mapping):
+            alerts.append(
+                _canonical_alert(
+                    _as_str(item.get("code")),
+                    severity=_severity_or_warning(item.get("severity")),
                 )
-        return alerts
-    return []
+            )
+        else:
+            alerts.append(_suppressed_alert())
+    return alerts
+
+
+def _canonical_alert(
+    code: str | None, *, severity: AlertSeverity = "warning"
+) -> RegistryAlert:
+    """Build a console-authored alert for an allowlisted code, else suppress it.
+
+    ``severity`` is honored only for the allowlisted path (the caller has already
+    normalized it to ``info``/``warning``/``critical``). The suppressed alert
+    always uses canonical console values.
+    """
+
+    message = _ALERT_MESSAGES.get(code) if code else None
+    if code is None or message is None:
+        return _suppressed_alert()
+    return RegistryAlert(
+        code=code,
+        message=message,
+        severity=severity,
+        source="fleet_registry",
+    )
+
+
+def _suppressed_alert() -> RegistryAlert:
+    return RegistryAlert(
+        code=_ALERT_SUPPRESSED_CODE,
+        message=_ALERT_SUPPRESSED_MESSAGE,
+        severity="warning",
+        source="fleet_registry",
+    )
 
 
 def _required_str(row: Mapping[str, Any], key: str) -> str:
