@@ -14,3 +14,5 @@ Status: G1 ready for autonomous Factory execution
 - Defined multi-agent/tenant Agents table requirement.
 - Defined server/service health cockpit requirement.
 - Defined premium UX mandate and secure deployment constraints.
+
+- Normalized task graph with explicit implementation, quality review, security review, private sandbox deploy, post-deploy verification, and delivery-report phase coverage.

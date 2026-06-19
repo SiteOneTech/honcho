@@ -13,6 +13,7 @@ Status: G1 ready for autonomous Factory execution
 - Confirm repo strategy and project docs.
 - Inspect existing Honcho API/OpenAPI and deployment files.
 - Verify current VM service topology.
+- Confirm canonical Factory phase contract before implementation dispatch.
 
 ## Sprint 1 - Backend Foundation
 
@@ -45,8 +46,10 @@ Status: G1 ready for autonomous Factory execution
 
 ## Sprint 5 - Deployment and QA
 
-- Deploy to `honcho-memory-prod`.
+- Deploy to `honcho-memory-prod` private Tailscale sandbox surface.
 - Replace/subsume current admin panel.
 - Run Playwright/browser QA.
+- Run independent quality review.
+- Run post-deploy browser/API health verification.
 - Capture screenshots/evidence.
 - Final delivery report.
