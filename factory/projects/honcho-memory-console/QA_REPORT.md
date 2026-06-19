@@ -231,6 +231,29 @@ Waivers / pending by phase contract:
 
 - T08 is local implementation plus browser smoke for the Memory explorer. Public sandbox URL, sandbox deploy path, docker compose deployment evidence, auth-bound deployed browser QA, and post-deploy browser/API verification remain pending T10/T11/T11B. No delivery/critical-readiness gate should be marked passed from this local T08 evidence alone.
 
+## T08 Rework Closure Evidence - Commit/Push Hygiene
+
+Scope: `honcho-memory-console-t08-memory-explorer-ux-and-integration` rework after increment integration rejected the prior terminal status because the worktree still had uncommitted Memory explorer screenshot artifacts.
+Evidence updated: `2026-06-19T15:36:47Z`.
+
+Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ/console/frontend`:
+
+- `npm test` -> frontend contract suites `11 passed`, `0 failed`, duration `137.758878ms`.
+- `uv run --frozen pytest console/backend/tests/test_honcho_memory_adapters.py -q` -> `4 passed in 4.91s`.
+- `npm run build && npm run smoke` -> Vite production build passed with `24 modules transformed`; Playwright/Chromium smoke suite passed `3 passed (12.2s)` across Health cockpit, Memory explorer, and shell navigation.
+- `git diff --check` -> exit `0`, no whitespace errors.
+- Frontend protected-value source scan over `console/frontend/src` for `Bearer|rawToken|password|Authorization|eyJ[A-Za-z0-9_-]+\\.` -> `total_count: 0`.
+
+Updated UI/browser evidence paths:
+
+- Desktop Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/desktop-memory-explorer.png` (`1440x1727`, `266948` bytes, sha256 `cd114f28d7744ad1454d3bfa89ed560e72413d894fd960cd7cc56cc832dddb74`).
+- Mobile Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/mobile-memory-explorer.png` (`390x3655`, `209598` bytes, sha256 `99b3e383a13c3f64c7e2e2ab6aeb695c63badae80fbb2004884088fcd536b268`).
+
+Closure note:
+
+- Full Playwright smoke regenerated unrelated T05 shell screenshots; those side effects were restored to HEAD before this rework commit so the diff remains scoped to T08 evidence plus this QA report update.
+- This rework records only local implementation/browser-smoke evidence and branch hygiene. Sandbox/deploy/delivery evidence remains pending T10/T11/T11B by the canonical project contract.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
