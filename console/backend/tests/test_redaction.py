@@ -3,6 +3,7 @@ import json
 from console.backend.app.redaction import (
     SECRET_REDACTION,
     fingerprint_secret,
+    redact_secret_text,
     redact_sensitive,
 )
 
@@ -80,6 +81,28 @@ def test_nested_secret_like_fields_are_redacted_recursively():
     serialized = _serialized(redacted)
     for secret in hidden_values.values():
         assert secret not in serialized
+
+
+def test_free_text_secret_patterns_are_redacted_without_touching_fingerprints():
+    jwt_like = "eyJhbGciOiJIUzI1NiJ9.eyJ3IjoiaGVybWVzIn0.signaturepart"
+    prefixed = "sk-factory-secret-marker-abcdef"
+    safe_fingerprint = "sha256:abcd1234ef567890"
+    text = (
+        f"Authorization: Bearer {jwt_like}; provider={prefixed}; "
+        f"fingerprint={safe_fingerprint}"
+    )
+
+    redacted_text = redact_secret_text(text)
+    redacted_payload = redact_sensitive({"message": text})
+    serialized_payload = _serialized(redacted_payload)
+
+    assert jwt_like not in redacted_text
+    assert prefixed not in redacted_text
+    assert safe_fingerprint in redacted_text
+    assert SECRET_REDACTION in redacted_text
+    assert jwt_like not in serialized_payload
+    assert prefixed not in serialized_payload
+    assert safe_fingerprint in serialized_payload
 
 
 def test_fingerprint_secret_is_stable_and_does_not_include_secret_value():

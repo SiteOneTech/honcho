@@ -257,6 +257,58 @@ async def test_honcho_api_adapter_fetches_memory_surfaces_and_sanitizes_data():
     await client.aclose()
 
 
+def test_memory_free_text_redacts_generic_token_shapes_at_api_boundary():
+    generic_jwt = "eyJhbGciOiJIUzI1NiJ9.eyJ3IjoiaGVybWVzIn0.signaturepart"
+    provider_key = "sk-factory-secret-marker-abcdef"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "GET" and path == "/v3/workspaces/hermes/peers/Zeus/card":
+            return httpx.Response(
+                200,
+                json={"peer_card": [f"generic jwt {generic_jwt}", f"provider {provider_key}"]},
+            )
+        if request.method == "POST" and path == "/v3/workspaces/hermes/conclusions/list":
+            return httpx.Response(
+                200,
+                json=_page(
+                    [
+                        {
+                            "id": "conclusion-generic-secret",
+                            "content": f"memory contains {generic_jwt} and {provider_key}",
+                            "observer_id": "Zeus",
+                            "observed_id": "Jean",
+                        }
+                    ]
+                ),
+            )
+        return httpx.Response(200, json=_page([]))
+
+    upstream_client = httpx.AsyncClient(
+        base_url="http://honcho.local",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = HonchoAPIAdapter(_settings(), client=upstream_client)
+    client = TestClient(create_app(_settings(), honcho_api_adapter=adapter))
+
+    card_response = client.get(
+        "/api/memory/workspaces/hermes/peers/Zeus/card",
+        headers=_basic_auth(),
+    )
+    conclusions_response = client.get(
+        "/api/memory/workspaces/hermes/conclusions",
+        headers=_basic_auth(),
+    )
+
+    assert card_response.status_code == 200
+    assert conclusions_response.status_code == 200
+    bodies = [card_response.json(), conclusions_response.json()]
+    serialized = json.dumps(bodies, sort_keys=True)
+    assert generic_jwt not in serialized
+    assert provider_key not in serialized
+    assert "[REDACTED]" in serialized
+
+
 def test_console_memory_endpoints_return_typed_sanitized_payloads():
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path

@@ -8,7 +8,7 @@ Reviewed: yes
 Reviewer: Zeus Factory orchestrator bootstrap pass
 Status: G1 ready for autonomous Factory execution
 
-Status: T03 rework evidence added; final deployed/browser security review remains pending later phases.
+Status: T09S repo-level security review passed for auth, token display, telemetry/audit storage, and command allowlist; deployed/browser security review remains pending later phases.
 
 ## Required Final Review Topics
 
@@ -110,3 +110,41 @@ Pending by phase contract:
 
 - Browser/deployed verification that raw tokens are not visible remains for sandbox/deploy/QA tasks T10/T11/T11B.
 - Service file/env permissions remain for deployment/security review phases.
+
+## T09S Security Review - Auth, Tokens, Telemetry, and Commands
+
+Scope: `honcho-memory-console-t09s-security-review-for-auth-tokens-tel`.
+Evidence updated: `2026-06-19T17:43:13Z`.
+Reviewer: `security-reviewer`.
+
+Verdict: PASS for repo-level security review. Deployment remains gated by later sandbox/browser checks because this task did not deploy or inspect VM service-file permissions.
+
+Findings reviewed:
+
+- Auth boundary: `console/backend/app/auth.py` enforces Basic Auth on all non-liveness paths, fails closed when no password is configured, uses constant-time comparison, and does not echo submitted credentials. `create_app()` wires the middleware before browser-facing `/api/*` handlers.
+- Backend-only Honcho tokens: `ConsoleSettings` keeps Honcho/API/JWT/DB/Redis/Infisical/provider values as `SecretStr`; `HonchoAPIAdapter._headers()` only sends the upstream token server-side; `/api/settings` exposes booleans and fingerprints only.
+- Fingerprint-only token display: `token_fingerprint`, `token_scope`, and `token_status` are the only token identity fields in public schemas/models. Fleet-provided raw token values are hashed server-side; non-canonical `token_fingerprint` values are rejected.
+- Telemetry/audit storage: `TelemetryRecorder` and `AuditTrail` store method, sanitized route template, status, latency, token fingerprint, and scope only. Their record signatures do not accept headers, bodies, raw authorization values, raw tokens, or secrets.
+- Service command allowlist: `LocalServiceHealthAdapter` restricts command execution to allowlisted `systemctl`, `docker`, and `tailscale` argument vectors and uses `subprocess.run(..., shell=False)`. Unit/service/path lists are allowlisted before use.
+- API schema inspection: FastAPI OpenAPI schema contains no runtime secret values or secret-bearing config field names (`honcho_api_token`, `jwt_secret`, `database_url`, `infisical_token`, `basic_auth_password`).
+- Rework applied during review: free-text redaction now covers common browser-facing raw credential patterns in otherwise safe string fields (JWT-like values, common provider/GitHub/GitLab/HuggingFace/Slack token prefixes, and Authorization header text) while preserving `sha256:` fingerprints. This closes a RED probe where synthetic token-shaped text in memory conclusion/peer-card content reached the API response.
+
+Files changed in this review:
+
+- `console/backend/app/redaction.py` — added `redact_secret_text()` and scalar-string credential pattern redaction.
+- `console/backend/app/adapters/honcho_api.py` — routes memory free-text scrubbing through the central free-text redactor, then applies known runtime-secret replacement.
+- `console/backend/tests/test_redaction.py` — added regression coverage for free-text token-shaped values without redacting fingerprints.
+- `console/backend/tests/test_honcho_memory_adapters.py` — added API-boundary regression coverage for generic token-shaped memory/peer-card content.
+- `factory/projects/honcho-memory-console/SECURITY_REVIEW.md` — recorded T09S evidence.
+
+Verification:
+
+- RED probe before mitigation: synthetic memory conclusion and peer-card responses containing token-shaped free text returned `generic_secret_probe_leaks` with the synthetic JWT-like/provider-key markers; this would have violated the deployment block rule.
+- GREEN targeted regression: `uv run --frozen pytest console/backend/tests/test_redaction.py::test_free_text_secret_patterns_are_redacted_without_touching_fingerprints console/backend/tests/test_honcho_memory_adapters.py::test_memory_free_text_redacts_generic_token_shapes_at_api_boundary -q` -> `2 passed in 6.20s`.
+- GREEN dynamic response scan: synthetic `/api/memory/workspaces/hermes/conclusions` and `/api/memory/workspaces/hermes/peers/Zeus/card` responses -> `generic_secret_probe_leaks: []`, `redaction_markers: 3`.
+- Full backend tests: `uv run --frozen pytest console/backend/tests -q` -> `33 passed in 6.39s`.
+- Lint: `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- Typecheck: `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
+- API schema scan: custom `create_app().openapi()` assertion -> `runtime_secret_value_leaks: 0`, `secret_field_name_leaks: 0`, `schema_paths: 19`.
+
+Deployment blockers from this review: none for repo-level T09S. Remaining gated evidence for T10/T11/T11B: sandbox/browser proof that no raw token values render in deployed UI, plus VM service/env permission checks.

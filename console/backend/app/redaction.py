@@ -19,12 +19,14 @@ Two complementary primitives are provided:
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any, cast
 
 __all__ = [
     "SECRET_REDACTION",
     "fingerprint_secret",
     "redact_sensitive",
+    "redact_secret_text",
     "is_sensitive_key",
 ]
 
@@ -77,6 +79,28 @@ _SAFE_KEY_PARTS: tuple[str, ...] = (
     "_safe",
 )
 
+# Browser-facing free text can come from upstream memory content or fleet registry
+# fields whose key names are not secret-like (for example a conclusion preview that
+# contains ``sk-...``). These patterns catch common credential shapes without
+# redacting safe operational identifiers such as ``sha256:<fingerprint>``.
+_AUTH_HEADER_VALUE_RE = re.compile(
+    r"\bauthorization\s*:\s*(?:bearer|basic)\s+[^\s,;]+",
+    flags=re.IGNORECASE,
+)
+_JWT_LIKE_RE = re.compile(
+    r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"
+)
+_PREFIXED_SECRET_PATTERN = "|".join(
+    (
+        r"(?:sk|pk|rk)-[A-Za-z0-9][A-Za-z0-9_-]{8,}",
+        r"(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{12,}",
+        r"glpat-[A-Za-z0-9_-]{12,}",
+        r"hf_[A-Za-z0-9]{12,}",
+        r"xox(?:b|p|a|r|s)-[A-Za-z0-9-]{12,}",
+    )
+)
+_PREFIXED_SECRET_RE = re.compile(rf"\b(?:{_PREFIXED_SECRET_PATTERN})\b")
+
 
 def is_sensitive_key(key: str) -> bool:
     """Return ``True`` when *key* names a value that must be redacted.
@@ -116,6 +140,21 @@ def fingerprint_secret(secret: Any) -> str:
     return f"sha256:{digest}"
 
 
+def redact_secret_text(value: str) -> str:
+    """Redact common raw credential patterns from browser-facing free text.
+
+    Key-based redaction handles structured payloads; this helper covers text that
+    arrives under otherwise safe keys (memory conclusions, peer-card text, display
+    names, alert summaries). It intentionally leaves non-reversible fingerprints
+    such as ``sha256:abcd...`` untouched.
+    """
+
+    sanitized = _AUTH_HEADER_VALUE_RE.sub(SECRET_REDACTION, value)
+    sanitized = _JWT_LIKE_RE.sub(SECRET_REDACTION, sanitized)
+    sanitized = _PREFIXED_SECRET_RE.sub(SECRET_REDACTION, sanitized)
+    return sanitized
+
+
 def redact_sensitive(value: Any) -> Any:
     """Recursively redact secret-like values in *value*.
 
@@ -125,7 +164,7 @@ def redact_sensitive(value: Any) -> Any:
     * ``list``/``tuple`` — each element is redacted recursively (tuples become
       lists so the result is JSON-serializable).
     * any ``SecretStr``-like object — replaced with :data:`SECRET_REDACTION`.
-    * scalars — returned unchanged.
+    * scalar strings — common raw credential patterns are redacted.
 
     The input is never mutated; a sanitized copy is returned.
     """
@@ -145,5 +184,8 @@ def redact_sensitive(value: Any) -> Any:
     # Pydantic SecretStr / SecretBytes and any look-alike: never serialize the value.
     if callable(getattr(value, "get_secret_value", None)):
         return SECRET_REDACTION
+
+    if isinstance(value, str):
+        return redact_secret_text(value)
 
     return value
