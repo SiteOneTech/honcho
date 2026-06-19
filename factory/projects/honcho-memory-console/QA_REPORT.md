@@ -234,26 +234,27 @@ Waivers / pending by phase contract:
 ## T08 Rework Closure Evidence - Commit/Push Hygiene
 
 Scope: `honcho-memory-console-t08-memory-explorer-ux-and-integration` rework after increment integration rejected the prior terminal status because the worktree still had uncommitted Memory explorer screenshot artifacts.
-Evidence updated: `2026-06-19T15:59:07Z`.
+Evidence updated: `2026-06-19T16:20:20Z`.
 
 Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-090-t08-memory-explorer-ux-and-integ/console/frontend`:
 
-- `npm test` -> frontend contract suites `11 passed`, `0 failed`, duration `156.919730ms`.
-- `npm run build` -> TypeScript + Vite production build passed with `24 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset; built in `208ms`.
-- `CI=1 npm run smoke -- smoke/memory-explorer.spec.ts` -> Playwright/Chromium Memory explorer smoke passed `1 passed (8.6s)` and refreshed only the T08 desktop/mobile evidence screenshots.
-- `uv run --frozen pytest console/backend/tests/test_honcho_memory_adapters.py -q` -> `4 passed in 6.51s`.
+- `npm test` -> frontend contract suites `11 passed`, `0 failed`, duration `137.870381ms`.
+- `npm run build` -> TypeScript + Vite production build passed with `24 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset; built in `198ms`.
+- `CI=1 npm run smoke -- smoke/memory-explorer.spec.ts` -> Playwright/Chromium Memory explorer smoke passed `1 passed (8.7s)` and refreshed only the T08 desktop/mobile evidence screenshots.
+- `uv run --frozen pytest console/backend/tests/test_honcho_memory_adapters.py -q` -> `4 passed in 4.97s`.
 - `git diff --check` -> exit `0`, no whitespace errors.
 - Frontend protected-value source scan over `console/frontend/src` for `Bearer|rawToken|Authorization|eyJ[A-Za-z0-9_-]+\\.|api_key|secret|password` -> `total_count: 0`.
-- Claude Code read-only closure audit (`claude-anthropic-code -p ... --allowedTools '' --max-turns 1 --output-format json`) -> success; confirmed remaining diff was scoped to T08 screenshot evidence and `git diff --check` was clean.
+- Claude Code read-only closure audit (`claude-anthropic-code -p ... --allowedTools '' --max-turns 1 --output-format json`) -> success with `CLAUDE_CODE_AUDIT_OK scoped-to-T08-ready-to-commit`.
+- `CHANGELOG.md` now includes a T08 line covering Memory explorer backend/frontend surfaces, explicit sensitive-content disclosure gates, search/filter interactions, and Playwright desktop/mobile evidence.
 
 Updated UI/browser evidence paths:
 
-- Desktop Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/desktop-memory-explorer.png` (`1440x1727`, `267025` bytes, sha256 `751e90481987ab6dd2c61b147fa853f8050239747fbe9b0895902b2aad0a8ba7`).
-- Mobile Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/mobile-memory-explorer.png` (`390x3655`, `208267` bytes, sha256 `92836d544ad91bdd542461755f1cabac03dc989e90055dda7f193c2d7531139d`).
+- Desktop Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/desktop-memory-explorer.png` (`1440x1727`, `266927` bytes, sha256 `e4125e970eb4cc0bd36b8ac2e5bee5f99dbe09b00cc47f8f29691b130a1e348e`).
+- Mobile Memory screenshot: `factory/projects/honcho-memory-console/evidence/t08-memory-explorer/mobile-memory-explorer.png` (`390x3655`, `208150` bytes, sha256 `4aa94adf792267247b56b12e369be1f446f09923cec53ef5e7b4c49adb644240`).
 
 Closure note:
 
-- This rework records local implementation/browser-smoke evidence plus branch hygiene for T08 only. The final diff is scoped to the Memory explorer QA report entry and T08 screenshot evidence.
+- This rework records local implementation/browser-smoke evidence plus branch hygiene for T08 only. The final diff is scoped to the T08 changelog line, Memory explorer QA report entry, and T08 screenshot evidence.
 - Sandbox URL, sandbox deploy path, docker compose deployment evidence, auth-bound deployed browser QA, and post-deploy browser/API verification remain pending T10/T11/T11B by the canonical project contract; no delivery/critical-readiness gate should be marked passed from this local T08 evidence alone.
 
 ## Planned QA Evidence
