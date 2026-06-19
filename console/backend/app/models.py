@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from datetime import UTC, datetime
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,13 +15,23 @@ __all__ = [
     "AgentRegistrySummaryResponse",
     "AgentVmHealth",
     "AlertValue",
+    "HealthCheck",
+    "HealthLayer",
+    "HealthStatus",
     "MemoryCounts",
     "QueueState",
     "RegistryAlert",
+    "ServiceHealthResponse",
     "TokenInfo",
 ]
 
 TokenStatus = Literal["valid", "expired", "mis-scoped", "unknown"]
+HealthStatus = Literal["healthy", "degraded", "down", "unknown"]
+HealthLayer = Literal["service", "storage", "resource", "network", "config", "update"]
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 class ConsoleModel(BaseModel):
@@ -36,6 +47,29 @@ class RegistryAlert(ConsoleModel):
     message: str
     severity: Literal["info", "warning", "critical"] = "warning"
     source: str | None = None
+
+
+class HealthCheck(ConsoleModel):
+    """Browser-safe point-in-time service health check."""
+
+    id: str
+    label: str
+    layer: HealthLayer
+    status: HealthStatus
+    summary: str
+    last_checked_at: str = Field(default_factory=_utc_now_iso)
+    latency_ms: float | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    safe_to_show: bool = True
+
+
+class ServiceHealthResponse(ConsoleModel):
+    """Public response for ``GET /api/health/services``."""
+
+    service: str = "honcho-memory-console"
+    status: Literal["ok", "degraded"]
+    generated_at: str = Field(default_factory=_utc_now_iso)
+    checks: list[HealthCheck]
 
 
 class TokenInfo(ConsoleModel):

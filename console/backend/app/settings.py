@@ -49,7 +49,33 @@ class ConsoleSettings(BaseSettings):
 
     # --- Backing stores / secret managers ------------------------------------
     database_url: SecretStr | None = None
+    redis_url: SecretStr | None = None
     infisical_token: SecretStr | None = None
+
+    # --- Local health adapter -------------------------------------------------
+    local_health_systemd_units: tuple[str, ...] = (
+        "honcho.service",
+        "honcho-admin.service",
+        "honcho-console.service",
+    )
+    local_health_update_timer_unit: str = "honcho-update.timer"
+    local_health_docker_compose_directory: str | None = None
+    local_health_docker_services: tuple[str, ...] = (
+        "api",
+        "deriver",
+        "database",
+        "redis",
+        "console",
+    )
+    local_health_disk_paths: tuple[str, ...] = (
+        "/",
+        "/opt/honcho",
+        "/var/lib/docker/volumes",
+    )
+    local_health_command_timeout_seconds: float = 3.0
+    local_health_http_timeout_seconds: float = 2.0
+    local_health_postgres_connect_timeout_seconds: int = 2
+    local_health_redis_socket_timeout_seconds: float = 2.0
 
     # --- Agent registry / fleet discovery ------------------------------------
     # Fleet registry credentials stay server-side. The browser sees only whether
@@ -146,10 +172,20 @@ ORDER BY agent_id
             "secrets": {
                 "jwt_secret_configured": self.jwt_secret is not None,
                 "database_url_configured": self.database_url is not None,
+                "redis_url_configured": self.redis_url is not None,
                 "infisical_token_configured": self.infisical_token is not None,
                 "provider_keys_configured": {
                     name: value is not None
                     for name, value in sorted(self.provider_api_keys.items())
                 },
+            },
+            "local_health": {
+                "systemd_units": list(self.local_health_systemd_units),
+                "update_timer_unit": self.local_health_update_timer_unit,
+                "docker_services": list(self.local_health_docker_services),
+                "disk_paths": list(self.local_health_disk_paths),
+                "docker_compose_directory_configured": (
+                    self.local_health_docker_compose_directory is not None
+                ),
             },
         }
