@@ -115,3 +115,39 @@ def test_audit_trail_records_console_operations_without_body_or_secret_fields():
     for event in snapshot.events:
         assert event.token_fingerprint == "sha256:abc123def4567890"
         assert event.token_scope == "workspace:hermes"
+
+
+def test_recorders_redact_secret_like_route_segments_even_when_given_raw_paths():
+    recorder = TelemetryRecorder(
+        token=SecretStr(RAW_TOKEN),
+        expected_workspace="hermes",
+        signing_secret=SIGNING_SECRET,
+        clock=lambda: datetime(2026, 6, 19, 16, 0, tzinfo=UTC),
+    )
+    trail = AuditTrail(
+        token_fingerprint=recorder.token_fingerprint,
+        token_scope=recorder.token_scope,
+        clock=lambda: datetime(2026, 6, 19, 16, 0, tzinfo=UTC),
+    )
+    raw_route = f"/api/not-found/{RAW_TOKEN}?token={SIGNING_SECRET}"
+
+    recorder.record(method="GET", route=raw_route, status_code=404, latency_ms=5.0)
+    trail.record(
+        actor="operator",
+        action="view.not-found.token",
+        outcome="error",
+        route=raw_route,
+        method="GET",
+        status_code=404,
+    )
+
+    telemetry = recorder.snapshot().model_dump(mode="json")
+    audit = trail.snapshot().model_dump(mode="json")
+    serialized = _serialized({"telemetry": telemetry, "audit": audit})
+
+    assert RAW_TOKEN not in serialized
+    assert SIGNING_SECRET not in serialized
+    assert "?" not in serialized
+    assert "[REDACTED]" in serialized
+    assert telemetry["routes"][0]["route"] == "/api/not-found/[REDACTED]"
+    assert audit["events"][0]["route"] == "/api/not-found/[REDACTED]"

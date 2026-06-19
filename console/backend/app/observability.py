@@ -10,17 +10,20 @@ bodies, response bodies, Authorization headers, raw tokens, or secret values.
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import RLock
-from typing import Any, Literal
+from typing import Any, Literal, cast
+from urllib.parse import unquote
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.routing import Match
 from starlette.types import ASGIApp
 
 from console.backend.app.adapters.token_fingerprint import derive_token_info
@@ -36,6 +39,23 @@ from console.backend.app.models import (
 __all__ = ["AuditTrail", "RequestObservabilityMiddleware", "TelemetryRecorder"]
 
 Clock = Callable[[], datetime]
+_REDACTED_ROUTE_SEGMENT = "[REDACTED]"
+_UNMATCHED_API_ROUTE = "/api/unmatched"
+_JWT_LIKE_RE = re.compile(r"^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
+_HEX_DIGEST_RE = re.compile(r"^[0-9a-fA-F]{32,}$")
+_LONG_BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]{32,}={0,2}$")
+_SECRET_PREFIXES = (
+    "bearer",
+    "ghp_",
+    "gho_",
+    "ghu_",
+    "ghs_",
+    "glpat-",
+    "hf_",
+    "sk-",
+    "xoxb-",
+    "xoxp-",
+)
 
 
 @dataclass(frozen=True)
@@ -230,19 +250,19 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
-        if not request.url.path.startswith("/api"):
+        if not _is_console_api_path(request.url.path):
             return await call_next(request)
 
         started = time.perf_counter()
         status_code = 500
-        route = request.url.path
+        route = _request_route_template_or_unmatched(request)
         try:
             response = await call_next(request)
             status_code = response.status_code
-            route = _route_template(request) or request.url.path
+            route = _route_template(request) or route
             return response
         except Exception:
-            route = _route_template(request) or request.url.path
+            route = _route_template(request) or route
             raise
         finally:
             latency_ms = (time.perf_counter() - started) * 1000
@@ -283,9 +303,72 @@ def _route_template(request: Request) -> str | None:
     return path if isinstance(path, str) else None
 
 
+def _request_route_template_or_unmatched(request: Request) -> str:
+    """Resolve a route template without persisting the raw request path.
+
+    Auth middleware can deny a request before FastAPI writes ``scope["route"]``.
+    In that case, inspect the app route table to recover a safe template for
+    matched API routes. If the request does not match any route, collapse it to a
+    fixed sentinel instead of recording attacker-controlled path segments.
+    """
+
+    template = _route_template(request) or _matched_route_template(request)
+    return _safe_route(template) if template is not None else _UNMATCHED_API_ROUTE
+
+
+def _matched_route_template(request: Request) -> str | None:
+    routes = getattr(getattr(request, "app", None), "routes", ())
+    for route in routes:
+        matches = getattr(route, "matches", None)
+        if not callable(matches):
+            continue
+        try:
+            match_result: Any = matches(request.scope)
+        except Exception:
+            continue
+        match: Match | None = None
+        if isinstance(match_result, tuple) and match_result:
+            candidate: object = cast(tuple[object, ...], match_result)[0]
+            match = candidate if isinstance(candidate, Match) else None
+        if match == Match.FULL:
+            path = getattr(route, "path", None)
+            return path if isinstance(path, str) else None
+    return None
+
+
+def _is_console_api_path(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
 def _safe_route(route: str) -> str:
-    path = str(route or "/api/unknown").split("?", 1)[0].strip()
-    return path if path.startswith("/") else f"/{path}"
+    path = str(route or "/api/unknown").split("?", 1)[0].split("#", 1)[0].strip()
+    if not path:
+        path = "/api/unknown"
+    if not path.startswith("/"):
+        path = f"/{path}"
+    segments = [_safe_route_segment(segment) for segment in path.split("/")]
+    sanitized = "/".join(segments)
+    return sanitized or "/api/unknown"
+
+
+def _safe_route_segment(segment: str) -> str:
+    if not segment:
+        return segment
+    if segment.startswith("{") and segment.endswith("}"):
+        return segment
+    decoded = unquote(segment).strip()
+    return _REDACTED_ROUTE_SEGMENT if _is_secret_like_segment(decoded) else segment
+
+
+def _is_secret_like_segment(segment: str) -> bool:
+    lowered = segment.lower()
+    if _JWT_LIKE_RE.match(segment):
+        return True
+    if _HEX_DIGEST_RE.match(segment):
+        return True
+    if _LONG_BASE64URL_RE.match(segment):
+        return True
+    return len(segment) >= 16 and lowered.startswith(_SECRET_PREFIXES)
 
 
 def _safe_action(action: str) -> str:

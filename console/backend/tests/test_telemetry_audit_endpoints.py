@@ -107,3 +107,53 @@ def test_audit_events_endpoint_records_ok_and_denied_operations_without_bodies_o
         assert "authorization" not in _serialized(event).lower()
 
     _assert_not_serialized(body, RAW_TOKEN, BASIC_PASSWORD, SIGNING_SECRET)
+
+
+def test_unmatched_api_paths_are_collapsed_before_telemetry_or_audit_persistence():
+    client = TestClient(create_app(_settings()))
+    raw_path = f"/api/not-found/{RAW_TOKEN}"
+    raw_query_secret = f"{SIGNING_SECRET}-{BASIC_PASSWORD}"
+
+    denied = client.get(f"{raw_path}?token={RAW_TOKEN}&secret={raw_query_secret}")
+    assert denied.status_code == 401
+
+    missing = client.get(f"{raw_path}?token={RAW_TOKEN}", headers=_basic_auth())
+    assert missing.status_code == 404
+
+    telemetry = client.get("/api/telemetry", headers=_basic_auth()).json()
+    audit = client.get("/api/audit/events", headers=_basic_auth()).json()
+    serialized = _serialized({"telemetry": telemetry, "audit": audit})
+
+    _assert_not_serialized(
+        serialized,
+        RAW_TOKEN,
+        SIGNING_SECRET,
+        BASIC_PASSWORD,
+        raw_query_secret,
+        raw_path,
+    )
+    assert "/api/unmatched" in {route["route"] for route in telemetry["routes"]}
+    unmatched_events = [event for event in audit["events"] if event["route"] == "/api/unmatched"]
+    assert unmatched_events
+    assert {event["outcome"] for event in unmatched_events} >= {"denied", "error"}
+    assert {event["action"] for event in unmatched_events} == {"view.unmatched"}
+
+
+def test_token_like_path_params_use_route_templates_not_raw_path_values():
+    client = TestClient(create_app(_settings()))
+    token_like_agent_id = RAW_TOKEN
+
+    response = client.get(f"/api/agents/{token_like_agent_id}", headers=_basic_auth())
+    assert response.status_code == 404
+
+    telemetry = client.get("/api/telemetry", headers=_basic_auth()).json()
+    audit = client.get("/api/audit/events", headers=_basic_auth()).json()
+    serialized = _serialized({"telemetry": telemetry, "audit": audit})
+
+    _assert_not_serialized(serialized, token_like_agent_id, SIGNING_SECRET, BASIC_PASSWORD)
+    assert "/api/agents/{agent_id}" in {route["route"] for route in telemetry["routes"]}
+    templated_events = [
+        event for event in audit["events"] if event["route"] == "/api/agents/{agent_id}"
+    ]
+    assert templated_events
+    assert {event["action"] for event in templated_events} == {"view.agents.agent_id"}

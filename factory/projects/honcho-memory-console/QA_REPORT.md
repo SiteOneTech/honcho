@@ -220,6 +220,32 @@ Waivers / pending by phase contract:
 
 - T09 is backend telemetry/audit implementation only. Public sandbox URL, docker compose deployment evidence, browser screenshots, and deployed browser/API verification remain pending T10/T11/T11B. Independent security review remains pending T09S.
 
+## T09 Rework Evidence - Raw Path Sanitization
+
+Scope: `honcho-memory-console-t09-token-api-telemetry-and-audit-trail` rework after security gate 612.
+Evidence updated: `2026-06-19T16:49:47Z`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-100-t09-token-api-telemetry-and-audi`:
+
+- RED regression check: `uv run --frozen pytest console/backend/tests/test_observability.py::test_recorders_redact_secret_like_route_segments_even_when_given_raw_paths console/backend/tests/test_telemetry_audit_endpoints.py::test_unmatched_api_paths_are_collapsed_before_telemetry_or_audit_persistence console/backend/tests/test_telemetry_audit_endpoints.py::test_token_like_path_params_use_route_templates_not_raw_path_values -q` -> `2 failed, 1 passed in 5.21s` before the fix because raw JWT-like path segments reached telemetry/audit route/action fields.
+- GREEN targeted check: same command after fix -> `3 passed in 5.28s`.
+- `uv run --frozen pytest console/backend/tests/test_observability.py console/backend/tests/test_telemetry_audit_endpoints.py -q` -> `8 passed in 5.32s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `31 passed in 5.79s`.
+- `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
+- `git diff --check` -> exit 0, no whitespace output.
+
+Coverage notes:
+
+- Observability now resolves matched FastAPI route templates before persistence, including requests denied by Basic Auth before `scope["route"]` exists.
+- Unmatched `/api/*` requests are persisted as fixed `/api/unmatched` instead of raw attacker-controlled paths.
+- Recorder-level route sanitization strips query/fragment data and redacts JWT-like, long hash, and base64/base64url-like segments as defense in depth.
+- Regression tests cover authenticated and unauthenticated `/api/not-found/<synthetic-jwt>` requests, query-string token/secret values, and token-like values in matched `/api/agents/{agent_id}` path params.
+
+Waivers / pending by phase contract:
+
+- Same as T09: backend implementation only. Public sandbox URL, docker compose deployment evidence, browser screenshots, deployed browser/API verification, and independent security review remain pending T10/T11/T11B/T09S.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
