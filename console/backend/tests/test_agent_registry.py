@@ -215,7 +215,14 @@ def test_fleet_registry_entries_take_precedence_and_sanitize_registry_tokens():
     assert agent["token_status"] == "valid"
     assert agent["memory_counts"]["messages"] == 7
     assert agent["queue_state"]["pending"] == 1
-    assert agent["alerts"] == ["queue_pending"]
+    assert agent["alerts"] == [
+        {
+            "code": "queue_pending",
+            "message": "Queue has pending derivation work.",
+            "severity": "warning",
+            "source": "fleet_registry",
+        }
+    ]
     assert agent["sources"] == ["fleet_registry"]
     _assert_not_serialized(body, registry_token, _secret("fleet-db-url"), BASIC_PASSWORD)
 
@@ -270,6 +277,90 @@ def test_fleet_registry_rejects_noncanonical_token_fingerprint_without_leaking_i
         for alert in detail_agent["alerts"]
     )
     _assert_not_serialized(detail_body, raw_looking_sentinel, _secret("fleet-db-url"))
+
+
+def test_fleet_registry_alert_strings_are_suppressed_without_leaking_text():
+    alert_marker = "synthetic-alert-marker-string-6b72787d"
+    fleet = FleetRegistryFixture(
+        rows=[
+            {
+                "agent_id": "worker-alpha",
+                "display_name": "Worker Alpha",
+                "honcho_workspace": "agent-workspace",
+                "alerts": [alert_marker],
+            }
+        ]
+    )
+    client = TestClient(
+        create_app(
+            _settings(fleet_registry_database_url=SecretStr(_secret("fleet-db-url"))),
+            fleet_registry_adapter=fleet,
+        )
+    )
+
+    list_response = client.get("/api/agents", headers=_basic_auth())
+    detail_response = client.get("/api/agents/worker-alpha", headers=_basic_auth())
+
+    assert list_response.status_code == 200
+    assert detail_response.status_code == 200
+    list_body = list_response.json()
+    detail_body = detail_response.json()
+    assert any(
+        alert["code"] == "fleet_registry_alert_suppressed"
+        for alert in list_body["agents"][0]["alerts"]
+    )
+    assert any(
+        alert["code"] == "fleet_registry_alert_suppressed"
+        for alert in detail_body["agent"]["alerts"]
+    )
+    _assert_not_serialized(list_body, alert_marker, _secret("fleet-db-url"))
+    _assert_not_serialized(detail_body, alert_marker, _secret("fleet-db-url"))
+
+
+def test_fleet_registry_alert_mapping_messages_are_replaced_by_canonical_text():
+    alert_marker = "synthetic-alert-marker-mapping-c0ecf7bf"
+    fleet = FleetRegistryFixture(
+        rows=[
+            {
+                "agent_id": "worker-alpha",
+                "display_name": "Worker Alpha",
+                "honcho_workspace": "agent-workspace",
+                "alerts": [
+                    {
+                        "code": "queue_pending",
+                        "message": alert_marker,
+                        "severity": "critical",
+                        "source": alert_marker,
+                    }
+                ],
+            }
+        ]
+    )
+    client = TestClient(
+        create_app(
+            _settings(fleet_registry_database_url=SecretStr(_secret("fleet-db-url"))),
+            fleet_registry_adapter=fleet,
+        )
+    )
+
+    list_response = client.get("/api/agents", headers=_basic_auth())
+    detail_response = client.get("/api/agents/worker-alpha", headers=_basic_auth())
+
+    assert list_response.status_code == 200
+    assert detail_response.status_code == 200
+    list_body = list_response.json()
+    detail_body = detail_response.json()
+    assert list_body["agents"][0]["alerts"] == [
+        {
+            "code": "queue_pending",
+            "message": "Queue has pending derivation work.",
+            "severity": "critical",
+            "source": "fleet_registry",
+        }
+    ]
+    assert detail_body["agent"]["alerts"] == list_body["agents"][0]["alerts"]
+    _assert_not_serialized(list_body, alert_marker, _secret("fleet-db-url"))
+    _assert_not_serialized(detail_body, alert_marker, _secret("fleet-db-url"))
 
 
 def test_fleet_registry_failure_degrades_to_config_discovery_fallback():

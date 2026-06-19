@@ -57,6 +57,30 @@ Waivers / pending by phase contract:
 
 - T03 is backend API/model work only; browser QA, screenshots, sandbox URL, and deployed service permission checks remain pending T10/T11/T11B.
 
+## T03 Rework Evidence - Fleet Registry Alert Text Sanitization
+
+Scope: `honcho-memory-console-t03-agent-registry-and-token-fingerprint` rework after security gate 594.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-040-t03-agent-registry-and-token-fin`:
+
+- RED regression check: `uv run --frozen pytest console/backend/tests/test_agent_registry.py::test_fleet_registry_alert_strings_are_suppressed_without_leaking_text console/backend/tests/test_agent_registry.py::test_fleet_registry_alert_mapping_messages_are_replaced_by_canonical_text -q` -> `2 failed in 4.19s` before the fix because raw fleet alert string/message/source values reached the API response.
+- GREEN regression check: same command -> `2 passed in 4.14s` after canonical alert sanitization.
+- `uv run --frozen pytest console/backend/tests/test_agent_registry.py -q` -> `8 passed in 4.39s`.
+- `uv run --frozen pytest console/backend/tests -q` -> `15 passed in 4.40s`.
+- `uv run --frozen ruff check console/backend` -> `All checks passed!`.
+- `uv run --frozen basedpyright console/backend` -> `0 errors, 0 warnings, 0 notes`.
+- Secret/marker API response scan over `/api/agents` and `/api/agents/scan-agent` with synthetic fleet alert markers plus fake auth/Honcho token values -> `marker_leaks: []`, status codes `[200, 200]`.
+
+Coverage notes:
+
+- Unit tests now prove free-form fleet registry alert strings are replaced by a canonical `fleet_registry_alert_suppressed` alert on both list and detail endpoints.
+- Unit tests now prove mapping-based fleet registry alerts keep only allowlisted codes/severity and replace untrusted `message`/`source` with console-authored canonical values.
+- Existing fleet registry precedence test now expects canonical alert objects instead of untrusted string passthrough.
+
+Waivers / pending by phase contract:
+
+- T03 remains backend API/model work only; browser QA, screenshots, sandbox URL, deployed service permission checks, and final security review remain pending T10/T11/T11B/T09S.
+
 ## Planned QA Evidence
 
 - Backend adapter/API contract tests for later increments.
