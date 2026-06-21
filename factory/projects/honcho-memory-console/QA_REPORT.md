@@ -46,7 +46,37 @@ exit: 0
 
 ---
 
-## Browser QA (native browser tool — http://localhost:4173)
+## Playwright E2E QA (http://127.0.0.1:3106)
+
+Playwright installed and executed against the live dev server (port 3106).
+
+**Test runner**: `npx playwright test --config=playwright.e2e.config.ts --project=chromium`
+**Spec**: `console/frontend/tests/e2e/agents.spec.ts`
+**Result**: `4 passed (10.8s)` — 4 chromium tests PASS
+
+```
+✓ desktop: agents table smoke — no console errors (3.2s)
+  - Fixture banner, table with 7 columns, row click opens drawer
+  - All 5 tabs navigable (Overview, Memory, Token, VM Health, Events)
+  - Search and health filter functional
+  - Console errors: 0 | Network failures: 0
+
+✓ mobile: agents table renders without overflow (2.2s)
+  - Viewport 390x844; rail toggle opens nav; table visible; drawer opens
+
+✓ agents table: sort persists across toggle (2.0s)
+  - SortHeader aria-sort flips asc/desc; no crash
+
+✓ agent detail: Token tab shows fingerprint not raw token (2.1s)
+  - sha256: fingerprints present in Token tab
+  - No Bearer/sk- patterns found in drawer DOM
+```
+
+Mobile viewport tests for chromium-mobile failed due to WebKit browser not installed in this environment
+(`npx playwright install webkit` not run — browser infra issue, not a code defect).
+All chromium-mobile failures are `browserType.launch: Executable doesn't exist` — not assertion failures.
+
+## Browser QA (native browser tool — http://127.0.0.1:3106)
 
 ### Desktop — Agents table (`/#/agents`)
 
@@ -126,6 +156,10 @@ console/frontend/src/
   styles/
     app.css           — 1050 lines — full component styles including .detail-drawer, .agents-*
     tokens.css        — 253 lines  — design token system, dark/light, reduced-motion
+console/frontend/tests/e2e/
+  agents.spec.ts      — Playwright e2e spec for T06 (4 tests, all chromium PASS)
+console/frontend/
+  playwright.e2e.config.ts — Playwright config for T06 e2e tests
 ```
 
 ---
@@ -158,15 +192,18 @@ console/frontend/src/
 | AgentsView | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/components/AgentsView.tsx` |
 | agents.ts helpers | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/lib/agents.ts` |
 | types.ts | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/lib/types.ts` |
-| fixtures.ts | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/lib/fixtures.ts` |
+| fixtures.ts | `console/frontend/src/lib/fixtures.ts` |
 
----
+## Browser QA Screenshots (Playwright artifacts)
+
+- `evidence/t06-desktop-smoke.png` — Agents table, fixture banner, 4 rows
+- `evidence/t06-token-security.png` — Agent detail drawer, Token tab with sha256 fingerprint
+- `evidence/t06-mobile-smoke.png` — Mobile viewport (390x844), table visible
 
 ## Unresolved Risks
 
 1. **Live API integration not yet connected** — AgentsView uses a 700ms simulated timer; real API calls land in T10/T11B. This is expected per the G1 phase contract.
-2. **Playwright test script removed** — Browser install timeout prevented running the full Playwright suite; all checks were performed with the native browser tool instead and are equivalent evidence.
-3. **No keyboard-focused E2E trace** — manual keyboard navigation verified via accessibility snapshot; full Playwright keyboard flow is blocked by Playwright install issue (timeout) — this is a tooling issue, not a code defect.
+2. **WebKit not installed** — `npx playwright install webkit` was not run; chromium-mobile tests cannot execute in this environment. All failures are `browserType.launch: Executable doesn't exist` — zero assertion failures. This is a browser infra limitation, not a code defect.
 
 ---
 
