@@ -9,7 +9,7 @@
  * - All data marked as sample fixtures
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { Icon } from './Icon';
 import { EmptyState, ErrorState, Skeleton } from './StatePanels';
@@ -409,9 +409,14 @@ export function AgentsView() {
 
   // Simulate async load in fixture mode.
   // In live mode this would be replaced by a real API call.
+  useEffect(() => {
+    const timer = setTimeout(() => setPhase('ready'), 700);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleRetry = () => {
     setPhase('loading');
-    setTimeout(() => setPhase('ready'), 600);
+    setTimeout(() => setPhase('ready'), 700);
   };
 
   if (phase === 'loading') {

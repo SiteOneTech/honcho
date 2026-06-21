@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 
 import { Icon, type IconName } from './components/Icon';
 import { AgentsView } from './components/AgentsView';
@@ -100,11 +100,13 @@ function App() {
   const route = useRoute();
   const [theme, setTheme] = useState<ThemeMode>(readInitialTheme);
   const [railOpen, setRailOpen] = useState(false);
+  const themeRef = useRef<ThemeMode>(theme);
+  themeRef.current = theme;
   const active = NAV_ITEMS.find((item) => item.id === route) ?? NAV_ITEMS[0]!;
   const copy = SECTION_COPY[route];
 
   const toggleTheme = () => {
-    const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
+    const next: ThemeMode = themeRef.current === 'dark' ? 'light' : 'dark';
     setTheme(next);
     applyTheme(next);
   };
