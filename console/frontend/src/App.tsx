@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 
 import { Icon, type IconName } from './components/Icon';
+import { AgentsView } from './components/AgentsView';
 import { EmptyState, ErrorState, Skeleton } from './components/StatePanels';
 import {
   FIXTURE_META,
-  agentsFixture,
   auditFixture,
   healthChecksFixture,
   overviewFixture,
@@ -12,10 +12,10 @@ import {
   telemetryFixture,
   workspacesFixture,
 } from './lib/fixtures';
-import { compactNumber, percent, relativeTime, sparklinePath, statusLabel } from './lib/format';
+import { compactNumber, relativeTime, sparklinePath, statusLabel } from './lib/format';
 import { navigate, type RouteId, useRoute } from './lib/router';
 import { applyTheme, readInitialTheme, type ThemeMode } from './lib/theme';
-import type { AgentRow, HealthCheck, HealthLayer, HealthStatus, TokenStatus } from './lib/types';
+import type { HealthCheck, HealthLayer, HealthStatus } from './lib/types';
 
 interface NavItem {
   id: RouteId;
@@ -84,13 +84,6 @@ const CHIP_CLASS: Record<HealthStatus, string> = {
   healthy: 'chip--healthy',
   degraded: 'chip--degraded',
   down: 'chip--down',
-  unknown: 'chip--unknown',
-};
-
-const TOKEN_CLASS: Record<TokenStatus, string> = {
-  valid: 'chip--healthy',
-  expired: 'chip--down',
-  'mis-scoped': 'chip--degraded',
   unknown: 'chip--unknown',
 };
 
@@ -263,16 +256,6 @@ function StatusChip({ status, label = statusLabel(status) }: { status: HealthSta
   );
 }
 
-function TokenChip({ status }: { status: TokenStatus }) {
-  const label = status === 'mis-scoped' ? 'Mis-scoped' : status[0]!.toUpperCase() + status.slice(1);
-  return (
-    <span className={`chip ${TOKEN_CLASS[status]}`}>
-      <span className="chip__dot" aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
 function Metric({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: IconName }) {
   return (
     <article className="metric">
@@ -337,80 +320,7 @@ function OverviewPage() {
 }
 
 function AgentsPage() {
-  const selected = agentsFixture[0]!;
-  return (
-    <section className="grid grid--2">
-      <Panel title="Agents registry" hint="Read-only shell table">
-        <AgentsTable agents={agentsFixture} />
-      </Panel>
-      <Panel title="Agent detail preview" hint="Drawer layout preview for T06">
-        <AgentDetail agent={selected} />
-      </Panel>
-    </section>
-  );
-}
-
-function AgentsTable({ agents }: { agents: AgentRow[] }) {
-  return (
-    <div className="table-wrap">
-      <table className="data">
-        <caption className="sr-only">Known Honcho memory console agents</caption>
-        <thead>
-          <tr>
-            <th scope="col">Agent</th>
-            <th scope="col">Tenant</th>
-            <th scope="col">Workspace</th>
-            <th scope="col">Fingerprint</th>
-            <th scope="col">Token</th>
-            <th scope="col">Queue</th>
-            <th scope="col">VM</th>
-          </tr>
-        </thead>
-        <tbody>
-          {agents.map((agent) => (
-            <tr key={agent.agentId}>
-              <td>
-                <div className="cell-primary">{agent.displayName}</div>
-                <div className="cell-sub">{agent.runtimeVm}</div>
-              </td>
-              <td>{agent.tenantId}</td>
-              <td>{agent.honchoWorkspace}</td>
-              <td className="mono">{agent.tokenFingerprint}</td>
-              <td><TokenChip status={agent.tokenStatus} /></td>
-              <td>{compactNumber(agent.queueState.pending)} pending</td>
-              <td>{agent.vmHealth.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AgentDetail({ agent }: { agent: AgentRow }) {
-  return (
-    <dl className="defs">
-      <dt>AI peer</dt>
-      <dd>{agent.aiPeer}</dd>
-      <dt>Human peer</dt>
-      <dd>{agent.humanPeer}</dd>
-      <dt>Scope</dt>
-      <dd>{agent.tokenScope}</dd>
-      <dt>Last write</dt>
-      <dd>{relativeTime(agent.lastWriteAt)}</dd>
-      <dt>Memory</dt>
-      <dd>
-        {compactNumber(agent.memoryCounts.sessions)} sessions · {compactNumber(agent.memoryCounts.conclusions)} conclusions
-      </dd>
-      <dt>VM resources</dt>
-      <dd>
-        CPU {percent(agent.vmHealth.cpuPercent)} · RAM {percent(agent.vmHealth.memoryPercent)} · Disk{' '}
-        {percent(agent.vmHealth.diskPercent)}
-      </dd>
-      <dt>Sources</dt>
-      <dd>{agent.sources.join(', ')}</dd>
-    </dl>
-  );
+  return <AgentsView />;
 }
 
 function MemoryPage() {
