@@ -55,6 +55,8 @@ def test_deploy_and_rollback_scripts_document_verification_and_secret_hygiene() 
     assert "deploy-summary.txt" in deploy
     assert "systemctl start honcho-console.service" in deploy
     assert "systemctl restart honcho-console.service" not in deploy
+    assert "wait_for_console \"$bind_address\"" in deploy
+    assert "http_healthz" in deploy
     assert "http_settings_auth" in deploy
     assert "chmod 0600" in deploy
     assert "HONCHO_CONSOLE_BOOTSTRAP_TOKEN" in deploy

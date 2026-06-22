@@ -221,7 +221,22 @@ start_console() {
 
 http_code() {
   local url="$1"
-  curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$url" || true
+  curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$url" || true
+}
+
+wait_for_console() {
+  local bind_address="$1"
+  local code=""
+  for _ in $(seq 1 45); do
+    code="$(http_code "http://${bind_address}:8080/healthz")"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: honcho-console did not become healthy at /healthz; last_http_code=${code:-000}" >&2
+  (cd "$REPO_DIR" && docker compose -f "$COMPOSE_FILE_REL" ps console) >&2 || true
+  return 1
 }
 
 authenticated_code() {
@@ -324,6 +339,7 @@ main() {
   validate_runtime_env
   install_unit
   start_console
+  wait_for_console "$bind_address"
   record_artifact "$bind_address" "$commit"
   print_summary "$bind_address" "$commit"
 }
