@@ -547,6 +547,150 @@ table.data tbody tr:hover {
   text-align: right;
 }
 
+table.data tbody tr[data-selected='true'] {
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+}
+
+/* ---- Memory explorer ---------------------------------------------------- */
+
+.memory-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.memory-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 520px) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.memory-toolbar__source {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+
+.memory-toolbar__summary {
+  margin-top: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.memory-filter {
+  position: relative;
+  min-width: 0;
+}
+
+.memory-filter input {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--space-3) 0 38px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.memory-filter input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.memory-filter input:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.memory-grid .panel {
+  min-width: 0;
+}
+
+.memory-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.memory-card-list--compact {
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.memory-card-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+}
+
+.memory-card-entry__index {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-faint);
+}
+
+.memory-card-entry__text {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.memory-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.memory-copy {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+}
+
+.memory-copy__label {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memory-copy p {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.memory-message-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.memory-message-preview {
+  max-width: 48ch;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.memory-message-preview--hidden {
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
 /* ---- Health layer cards ------------------------------------------------- */
 
 .health-card {
@@ -603,6 +747,86 @@ table.data tbody tr:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 38ch;
+}
+
+.health-card--cockpit {
+  min-height: 100%;
+}
+
+.health-cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.health-cockpit__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.health-cockpit__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+
+.health-cockpit__summary {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.health-cockpit__notice {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-degraded) 45%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--color-degraded-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.health-row--rich {
+  align-items: flex-start;
+}
+
+.health-row__timestamp {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--color-text-faint);
+}
+
+.health-row__evidence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.health-row__evidence-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.evidence-pill {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
 }
 
 /* ---- Sparkline ---------------------------------------------------------- */
@@ -735,6 +959,11 @@ table.data tbody tr:hover {
 @media (max-width: 1080px) {
   .grid--2 {
     grid-template-columns: 1fr;
+  }
+
+  .memory-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
 

@@ -8,7 +8,6 @@ secret values from every payload before routes return it to the UI.
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable
 from typing import Any, Generic, TypeVar, cast
@@ -17,7 +16,11 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import BaseModel, Field, SecretStr
 
-from console.backend.app.redaction import SECRET_REDACTION, redact_sensitive
+from console.backend.app.redaction import (
+    SECRET_REDACTION,
+    redact_secret_text,
+    redact_sensitive,
+)
 from console.backend.app.settings import ConsoleSettings
 
 __all__ = [
@@ -42,11 +45,6 @@ __all__ = [
 
 T = TypeVar("T", bound=BaseModel)
 JsonObject = dict[str, Any]
-
-_AUTH_HEADER_RE = re.compile(
-    r"authorization\s*:\s*(?:bearer|basic)\s+[^\s,;]+",
-    flags=re.IGNORECASE,
-)
 
 
 class HonchoAPIError(Exception):
@@ -266,7 +264,7 @@ class _SecretScrubber:
         return value, False
 
     def _scrub_text(self, value: str) -> tuple[str, bool]:
-        sanitized = _AUTH_HEADER_RE.sub(SECRET_REDACTION, value)
+        sanitized = redact_secret_text(value)
         for secret in self._secrets:
             sanitized = sanitized.replace(secret, SECRET_REDACTION)
         return sanitized, sanitized != value

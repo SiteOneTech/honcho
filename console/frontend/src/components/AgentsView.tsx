@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 
 import { Icon } from './Icon';
 import { EmptyState, ErrorState, Skeleton } from './StatePanels';
-import { agentsFixture, type AgentEvent } from '../lib/fixtures';
+import { agentsFixture } from '../lib/fixtures';
 import { AGENT_COLUMNS } from '../lib/agents';
 import type { AgentRow, HealthStatus } from '../lib/types';
 import {
@@ -35,6 +35,14 @@ const HEALTH_CHIP: Record<HealthStatus, string> = {
   down: 'chip--down',
   unknown: 'chip--unknown',
 };
+
+interface AgentEvent {
+  id: string;
+  at: string | null;
+  action: string;
+  actor: string;
+  outcome: 'ok' | 'error' | 'denied';
+}
 
 function HealthChip({ status }: { status: HealthStatus }) {
   return (
@@ -175,7 +183,7 @@ function AgentRow_({
       <td className="num">{compactNumber(memTotal)}</td>
       <td className="num">
         {compactNumber(agent.queueState.pending)} pending
-        {agent.queueState.errors > 0 && (
+        {(agent.queueState.errors ?? 0) > 0 && (
           <span className="err-count"> · {agent.queueState.errors} errors</span>
         )}
       </td>
@@ -205,25 +213,28 @@ function AgentDetail({
 
   const sections = ['Overview', 'Memory', 'Token', 'VM Health', 'Events'] as const;
 
+  const eventBaseAt = agent.lastWriteAt ?? new Date(0).toISOString();
+  const eventBaseMs = Date.parse(eventBaseAt);
+
   // Synthetic events derived from fixture state (no real event log in fixture mode).
   const events: AgentEvent[] = [
     {
       id: 'evt_detail_1',
-      at: agent.lastWriteAt,
+      at: eventBaseAt,
       action: 'memory.write',
       actor: agent.agentId,
       outcome: health === 'healthy' ? 'ok' : 'error',
     },
     {
       id: 'evt_detail_2',
-      at: new Date(new Date(agent.lastWriteAt).getTime() - 5 * 60 * 1000).toISOString(),
+      at: new Date(eventBaseMs - 5 * 60 * 1000).toISOString(),
       action: 'queue.poll',
       actor: agent.agentId,
       outcome: agent.queueState.errors === 0 ? 'ok' : 'error',
     },
     {
       id: 'evt_detail_3',
-      at: new Date(new Date(agent.lastWriteAt).getTime() - 12 * 60 * 1000).toISOString(),
+      at: new Date(eventBaseMs - 12 * 60 * 1000).toISOString(),
       action: 'token.validate',
       actor: agent.agentId,
       outcome: agent.tokenStatus === 'valid' ? 'ok' : 'denied',
@@ -309,7 +320,7 @@ function AgentDetail({
             <dt>Conclusions</dt>
             <dd>{compactNumber(agent.memoryCounts.conclusions)}</dd>
             <dt>Peer cards</dt>
-            <dd>{compactNumber(agent.memoryCounts.peerCards)}</dd>
+            <dd>{compactNumber(agent.memoryCounts.peerCardEntries)}</dd>
           </dl>
         )}
 
@@ -334,7 +345,7 @@ function AgentDetail({
         {activeSection === 'VM Health' && (
           <dl className="defs">
             <dt>VM status</dt>
-            <dd><HealthChip status={agent.vmHealth.status} /></dd>
+            <dd><HealthChip status={agentHealth(agent)} /></dd>
             <dt>CPU</dt>
             <dd>{percent(agent.vmHealth.cpuPercent)}</dd>
             <dt>RAM</dt>

@@ -15,6 +15,9 @@ __all__ = [
     "AgentRegistrySummaryResponse",
     "AgentVmHealth",
     "AlertValue",
+    "AuditEvent",
+    "AuditEventsResponse",
+    "AuditOutcome",
     "HealthCheck",
     "HealthLayer",
     "HealthStatus",
@@ -22,12 +25,15 @@ __all__ = [
     "QueueState",
     "RegistryAlert",
     "ServiceHealthResponse",
+    "TelemetryResponse",
+    "TelemetryRouteStat",
     "TokenInfo",
 ]
 
 TokenStatus = Literal["valid", "expired", "mis-scoped", "unknown"]
 HealthStatus = Literal["healthy", "degraded", "down", "unknown"]
 HealthLayer = Literal["service", "storage", "resource", "network", "config", "update"]
+AuditOutcome = Literal["ok", "denied", "error"]
 
 
 def _utc_now_iso() -> str:
@@ -107,6 +113,52 @@ class AgentApiActivity(ConsoleModel):
     requests_24h: int | None = None
     error_rate: float | None = None
     p95_latency_ms: float | None = None
+
+
+class TelemetryRouteStat(ConsoleModel):
+    """Aggregated request telemetry for a single sanitized API route."""
+
+    route: str
+    requests: int
+    errors: int
+    error_rate: float | None = None
+    p95_latency_ms: float | None = None
+
+
+class TelemetryResponse(ConsoleModel):
+    """Public response for token-safe console API telemetry."""
+
+    service: str = "honcho-memory-console"
+    status: Literal["ok", "degraded"] = "ok"
+    generated_at: str = Field(default_factory=_utc_now_iso)
+    token_fingerprint: str | None = None
+    token_scope: str = "unknown"
+    totals: AgentApiActivity = Field(default_factory=AgentApiActivity)
+    routes: list[TelemetryRouteStat] = Field(default_factory=list)
+
+
+class AuditEvent(ConsoleModel):
+    """A sanitized console operation audit event."""
+
+    id: str
+    at: str = Field(default_factory=_utc_now_iso)
+    actor: Literal["operator", "unknown"]
+    action: str
+    outcome: AuditOutcome
+    route: str
+    method: str
+    status_code: int
+    token_fingerprint: str | None = None
+    token_scope: str = "unknown"
+
+
+class AuditEventsResponse(ConsoleModel):
+    """Public response for ``GET /api/audit/events``."""
+
+    service: str = "honcho-memory-console"
+    status: Literal["ok", "degraded"] = "ok"
+    total: int
+    events: list[AuditEvent] = Field(default_factory=list)
 
 
 class AgentVmHealth(ConsoleModel):
