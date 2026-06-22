@@ -1,6 +1,6 @@
 [Unit]
 Description=Honcho Memory Console private Tailscale sandbox
-Documentation=/srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/README.md
+Documentation=file:/srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/README.md
 After=network-online.target docker.service honcho.service
 Wants=network-online.target
 Requires=docker.service

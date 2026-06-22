@@ -22,6 +22,12 @@ def test_honcho_memory_prod_deploy_pack_has_required_repo_managed_files() -> Non
     assert missing == []
 
 
+def test_repo_gitignore_allows_the_ops_compose_file_to_be_tracked() -> None:
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "docker-compose.yml" in gitignore
+    assert "!ops/honcho-memory-prod/docker-compose.yml" in gitignore
+
+
 def test_compose_uses_runtime_env_without_baking_or_mounting_secrets() -> None:
     compose = _read("docker-compose.yml")
     assert "HONCHO_CONSOLE_RUNTIME_ENV" in compose

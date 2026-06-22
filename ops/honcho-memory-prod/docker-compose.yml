@@ -1,0 +1,37 @@
+name: honcho-memory-console
+
+services:
+  console:
+    container_name: honcho-memory-console
+    image: honcho-memory-console:local
+    build:
+      context: ../..
+      dockerfile: ops/honcho-memory-prod/console.Dockerfile
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - ${HONCHO_CONSOLE_RUNTIME_ENV:-/etc/honcho-memory-console/runtime.env}
+    environment:
+      HONCHO_CONSOLE_BIND_ADDRESS: ${HONCHO_CONSOLE_BIND_ADDRESS:-127.0.0.1}
+      HONCHO_CONSOLE__FRONTEND_STATIC_DIR: /app/console/frontend/dist
+    command:
+      - uvicorn
+      - console.backend.app.main:app
+      - --host
+      - ${HONCHO_CONSOLE_BIND_ADDRESS:-127.0.0.1}
+      - --port
+      - "8080"
+      - --proxy-headers
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os, urllib.request; host=os.environ.get('HONCHO_CONSOLE_BIND_ADDRESS','127.0.0.1'); urllib.request.urlopen(f'http://{host}:8080/healthz', timeout=2).read()"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    labels:
+      com.sitiouno.factory.project: honcho-memory-console
+      com.sitiouno.factory.service: honcho-memory-console
+      com.sitiouno.factory.runtime: honcho-memory-prod
