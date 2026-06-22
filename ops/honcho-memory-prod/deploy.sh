@@ -207,7 +207,16 @@ install_unit() {
 }
 
 start_console() {
-  systemctl restart honcho-console.service
+  # Avoid `systemctl restart` here: the unit intentionally restores the
+  # legacy honcho-admin.service in ExecStopPost for manual rollback safety.
+  # A restart transaction can therefore cancel the new start job when the
+  # conflicting admin unit is re-started during the stop phase. A sequential
+  # stop/start keeps rollback semantics and lets the start transaction stop
+  # honcho-admin.service through the unit Conflicts/ExecStartPre directives.
+  if systemctl is-active --quiet honcho-console.service; then
+    systemctl stop honcho-console.service
+  fi
+  systemctl start honcho-console.service
 }
 
 http_code() {
