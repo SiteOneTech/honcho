@@ -22,7 +22,7 @@ Status: G1 ready for autonomous Factory execution
 | T08 Memory explorer UX and integration | todo | Workspace/peer/conclusion views |
 | T09 Token/API telemetry and audit trail | implementation rework done / pending security review | Backend `/api/telemetry` fallback aggregation and live `/api/audit/events` implemented with fingerprint/scope-only tests; security rework fixed raw path leakage using route templates, `/api/unmatched`, and secret-like segment redaction; evidence in QA_REPORT.md and SECURITY_REVIEW.md |
 | T09S Security review for auth, tokens, telemetry, and commands | todo | Security gate coverage |
-| T10 Private Tailscale sandbox deploy packaging for honcho-memory-prod | todo | Repo-managed deploy to private Tailscale surface |
+| T10 Private Tailscale sandbox deploy packaging for honcho-memory-prod | done | Repo-managed deploy pack under `ops/honcho-memory-prod`; private Tailscale deploy verified on `honcho-memory-prod` with systemd active, Docker health healthy, `/healthz=200`, unauth `/=401`, Honcho API `/health=200`, and rollback documented; evidence in QA_REPORT.md, DELIVERY_REPORT.md, and `evidence/t10-deployment-packaging/deploy-and-health-evidence.md` |
 | T11 Browser QA, accessibility, and visual polish pass | todo | Playwright/browser evidence |
 | T11Q Independent quality review of console UX/code | todo | Quality-review phase coverage |
 | T11B Post-deploy browser/API health verification | todo | Post-sandbox verification coverage |

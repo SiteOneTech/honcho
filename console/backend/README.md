@@ -5,7 +5,8 @@ Repo-managed FastAPI scaffold for the private Honcho Memory Console.
 ## Security boundary
 
 - Every browser-facing `/api/*` endpoint is protected by HTTP Basic Auth middleware.
-- If `HONCHO_CONSOLE__BASIC_AUTH_PASSWORD` is unset or empty, `/api/*` fails closed with `401`.
+- The production frontend bundle is also served by the backend when `HONCHO_CONSOLE__FRONTEND_STATIC_DIR` or the default `console/frontend/dist` path exists; it is protected by the same Basic Auth middleware.
+- If `HONCHO_CONSOLE__BASIC_AUTH_PASSWORD` is unset or empty, every non-liveness route fails closed with `401`.
 - `/healthz` is the only unauthenticated liveness endpoint and returns no runtime configuration.
 - Raw bearer tokens, JWT secrets, provider keys, Infisical tokens, fleet registry database URLs, and database passwords must never be serialized to browser responses or logs.
 - Browser-safe configuration is exposed only through `ConsoleSettings.public_config()`, which returns booleans and `sha256:` fingerprints.
@@ -35,6 +36,7 @@ Optional server-side integrations:
 - `HONCHO_CONSOLE__FLEET_REGISTRY_DATABASE_URL`
 - `HONCHO_CONSOLE__FLEET_REGISTRY_CONNECT_TIMEOUT_SECONDS`
 - `HONCHO_CONSOLE__FLEET_REGISTRY_AGENT_QUERY` (read-only `SELECT`, defaults to `factory.agent_registry`)
+- `HONCHO_CONSOLE__FRONTEND_STATIC_DIR` (optional Vite `dist/` path served by the backend)
 
 Local health adapter knobs are allowlisted and should normally keep defaults:
 

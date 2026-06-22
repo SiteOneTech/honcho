@@ -7,6 +7,7 @@ api/docker-compose.yml
 data
 redis-data
 docker-compose.yml
+!ops/honcho-memory-prod/docker-compose.yml
 compose.yml
 
 

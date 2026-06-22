@@ -1,0 +1,22 @@
+[Unit]
+Description=Honcho Memory Console private Tailscale sandbox
+Documentation=file:/srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/README.md
+After=network-online.target docker.service honcho.service
+Wants=network-online.target
+Requires=docker.service
+Conflicts=honcho-admin.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/srv/factory/projects/honcho-memory-console/repo
+EnvironmentFile=-/etc/honcho-memory-console/deploy.env
+ExecStartPre=/usr/bin/systemctl stop honcho-admin.service
+ExecStart=/usr/bin/docker compose -f /srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/docker-compose.yml up -d --build console
+ExecStop=/usr/bin/docker compose -f /srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/docker-compose.yml stop console
+ExecStopPost=/usr/bin/systemctl start honcho-admin.service
+TimeoutStartSec=900
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

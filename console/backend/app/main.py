@@ -22,10 +22,12 @@ Route map:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
+from starlette.staticfiles import StaticFiles
 
 from console.backend.app.adapters.agent_registry import AgentRegistryService
 from console.backend.app.adapters.fleet_registry import FleetRegistryClient
@@ -410,6 +412,7 @@ def create_app(
         response = application.state.audit_trail.snapshot()
         return redact_sensitive(response.model_dump(mode="json"))
 
+    _mount_frontend_static(application, settings)
     return application
 
 
@@ -422,6 +425,31 @@ def _secret_or_none(value: Any) -> str | None:
     raw = get_secret_value() if callable(get_secret_value) else value
     text = str(raw or "")
     return text or None
+
+
+def _mount_frontend_static(application: FastAPI, settings: ConsoleSettings) -> None:
+    """Serve the production Vite bundle when it exists.
+
+    The BasicAuthMiddleware protects this mount because only liveness probes are
+    public. The mount is intentionally optional so backend unit tests and API-only
+    development do not need a built frontend bundle.
+    """
+
+    configured = settings.frontend_static_dir
+    static_dir = (
+        Path(configured).expanduser()
+        if configured
+        else Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    )
+    index_file = static_dir / "index.html"
+    if not index_file.is_file():
+        return
+
+    application.mount(
+        "/",
+        StaticFiles(directory=static_dir, html=True),
+        name="frontend",
+    )
 
 
 #: Module-level application singleton for ASGI servers (``uvicorn ... :app``).
