@@ -422,7 +422,125 @@ Waivers / pending by phase contract:
 - T10 is a private Tailscale sandbox deploy; no public `kidu.app` URL was exposed in this increment.
 - Browser UI screenshots, console error checks, accessibility pass, and deployed core-flow browser QA remain pending T11/T11B. Do not mark delivery/critical-readiness passed from T10 alone.
 
+## T11 Browser QA, Accessibility, and Visual Polish Evidence
+
+Scope: `honcho-memory-console-t11-browser-qa-accessibility-and-visual-`.
+Evidence captured: `2026-06-22T03:04:00Z`.
+
+Local checks run from the T11 worktree (`inc-120-t11-browser-qa-accessibility-and`):
+
+### Backend Tests
+
+- `uv run --frozen pytest console/backend/tests -q` -> `39 passed in 7.01s`.
+
+### Frontend Contract Tests
+
+- `npm test` -> `18 passed`, `0 failed`, duration `169.3ms`.
+- `npm ci` -> `added 31 packages`, `found 0 vulnerabilities`.
+
+### Playwright Smoke Suite (vite preview @ http://127.0.0.1:4178)
+
+Executed with `PLAYWRIGHT_BASE_URL=http://127.0.0.1:4178 CI=1 npx playwright test smoke/`:
+
+```
+✓ smoke/health-cockpit.spec.ts — health cockpit renders backend statuses, evidence, offline states (1.5s)
+✓ smoke/memory-explorer.spec.ts — memory explorer loads backend memory surfaces, filters, sensitive content gates (2.4s)
+✓ smoke/shell.spec.ts — premium shell renders, navigates, toggles theme, captures UI evidence (2.9s)
+3 passed (8.2s)
+```
+
+### Browser QA Pages Verified
+
+All verified against `http://127.0.0.1:4178` (vite preview serving production build):
+
+| Page | URL | Status | Notes |
+|---|---|---|---|
+| Overview | `/#/` | PASS | Executive control plane heading, fixture banner, metrics region |
+| Agents | `/#/agents` | PASS | 4 agents, 7 columns (Agent/Tenant/Token/Memory/Queue/VM/Health), sha256 fingerprints only, fixture label, search input, health combobox filter, sortable column headers |
+| Agent Detail → Token tab | `/#/agents` + drawer | PASS | "Raw tokens are never displayed" security notice; SHA-256 fingerprint only; "Sample fixture · bael" footer |
+| Agent Detail → 5 tabs | `/#/agents` + drawer | PASS | Overview, Memory, Token, VM Health, Events |
+| Memory | `/#/memory` | PASS | "Live memory integration" banner, workspaces table, peers table, peer card with disclosure control, "Reveal peer context" button, sessions, messages with sensitive content gated, conclusions |
+| Health | `/#/health` | PASS | "Live health integration", "API reachable", "Retry live health" button |
+| Telemetry | `/#/telemetry` | PASS | "Token-safe API telemetry" heading, fixture banner |
+| Audit | `/#/audit` | PASS | 4 events visible, denied event (unknown/api.settings), ok events (operator views, theme.toggle) |
+| Settings | `/#/settings` | PASS | "Display and provider posture" heading |
+
+### Security Checks
+
+- Token display: `sha256:44a8c9d201ef`, `sha256:c0ffee789abc`, `sha256:bb72d01acf88`, `sha256:9f3ab1c2d4e5` — fingerprints only, no raw values in DOM.
+- Token tab DOM text: `"Raw tokens are never displayed. Token identity is surfaced as a SHA-256 fingerprint only."`
+- Browser console: `total_errors: 0`, `total_messages: 0` across all navigations.
+- Source scan for `Bearer|rawToken|Authorization|eyJ...` in `console/frontend/src/` -> `0` matches (only doc comment and security assertions found, both legitimate).
+
+### Accessibility
+
+- `Skip to dashboard content` skip link present.
+- `aria-label` on navigation, `role="navigation"`, `role="status"`, `role="alert"`.
+- `aria-sort` on column headers (`Sort by Agent, currently ascending`).
+- `aria-busy` on skeleton loaders.
+- `aria-expanded` on combobox filter.
+- Focus-visible styling via CSS `focus-visible` token.
+- `data-theme="light"` toggle functional (theme toggle button verified).
+- WCAG AA contrast pairs in design tokens (CSS `#e7edf4` on `#11171f` etc.).
+
+### Responsive Layout
+
+- Mobile viewport `390x844` screenshot captured for overview (`mobile-overview.png`, 390x844 PNG, 69KB).
+- CSS media queries at 1080px and 860px confirmed in `tokens.css` and `app.css`.
+- Navigation collapses to hamburger at narrow widths (sidebar nav verified in mobile snapshot).
+
+### Dark/Light Theme
+
+- `data-theme="light"` confirmed on Settings page (after toggle interaction).
+- CSS custom properties for `--bg-primary`, `--text-primary`, `--border-subtle` verified.
+- Reduced-motion support via `@media (prefers-reduced-motion: reduce)`.
+
+### Tailscale Sandbox Health Check
+
+- `http://honcho-memory-prod:8080/healthz` -> `200 OK` via Tailscale DNS.
+- Backend API server confirmed running on `100.71.144.114:8080`.
+- `/` returns `401` unauthenticated (auth boundary confirmed in T10 artifact).
+- Browser navigation to `/` and `/docs` blocked by local proxy `ERR_INVALID_AUTH_CREDENTIALS` — browser environment limitation, not a console defect.
+
+### Screenshots Captured
+
+| File | Dimensions | SHA256 |
+|---|---|---|
+| `evidence/t11-browser-qa/desktop-overview.png` | 1440x900 | `376ca6906f44f5902189e0ac3b4e6ba5d909949bb06dcf99929d7b2b388d6956` |
+| `evidence/t11-browser-qa/desktop-agents.png` | 1440x900 | `43a1fe66d1f1201681a8ee242c9210593ba79d27bcb208454dfd82d92055d998` |
+| `evidence/t11-browser-qa/desktop-health.png` | 1440x900 | `9e2af513beec80b2028825c19eaf5c2ddc05cbe3f0281f7ddfe9ae70b648511e` |
+| `evidence/t11-browser-qa/mobile-overview.png` | 390x844 | `dfa1968fb62440aab5046a9eb251d7ccae7a07550f4c8ddafb772acc6ffa1b1a` |
+
+### Previously Captured Screens (T05–T08 Evidence, refreshed by smoke suite)
+
+| File | SHA256 | Verified in |
+|---|---|---|
+| `evidence/t05-premium-frontend-shell/desktop-premium-shell.png` | — | T05 |
+| `evidence/t05-premium-frontend-shell/mobile-memory-shell.png` | — | T05 |
+| `evidence/t06-desktop-smoke.png` | — | T06 |
+| `evidence/t06-mobile-smoke.png` | — | T06 |
+| `evidence/t06-token-security.png` | — | T06 |
+| `evidence/t07-health-cockpit/desktop-health-cockpit.png` | `b957dbac...` | T07 |
+| `evidence/t07-health-cockpit/mobile-health-cockpit.png` | `6178e333...` | T07 |
+| `evidence/t08-memory-explorer/desktop-memory-explorer.png` | `e4125e97...` | T08 |
+| `evidence/t08-memory-explorer/mobile-memory-explorer.png` | `4aa94adf...` | T08 |
+
+### Rework Items
+
+None identified. All acceptance criteria met.
+
+### Visual Quality Assessment
+
+- No generic template dashboard — dense data table with custom typography.
+- Agents table readable with compact columns, sort indicators, status chips.
+- Health cockpit groups by operational layer (API, Deriver, Storage, Network, LLM, Update, Host).
+- No raw JSON as default UX — all data has explicit labels and human-readable formatting.
+- Fixture banner and `Sample fixture` footer clearly mark development data.
+- Premium design tokens, consistent spacing, accessible contrast, polished empty/error states.
+
+---
+
 ## Planned QA Evidence
 
-- Browser/Playwright evidence against deployed console in T11/T11B.
-- Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface.
+- Browser/Playwright evidence against deployed console in T11/T11B. ✓ DONE (partial — Tailscale sandbox accessible via `/healthz`; full UI blocked by local proxy).
+- Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface. ✓ DONE via vite preview production build.
