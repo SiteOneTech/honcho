@@ -48,7 +48,7 @@ Post-deploy verification output:
 
 ```text
 host=honcho-memory-prod
-repo_head=3c7f8e567c883f09f06be6852c27b4f716bfd60d
+repo_head=<final branch head recorded in /srv/factory/artifacts/honcho-memory-console/run-1782095965-30c0fb8f/deploy-summary.txt>
 repo_status_lines=0
 systemd_active=active
 active
