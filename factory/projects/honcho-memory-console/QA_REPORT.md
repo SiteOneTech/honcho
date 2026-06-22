@@ -497,10 +497,10 @@ All verified against `http://127.0.0.1:4178` (vite preview serving production bu
 
 ### Tailscale Sandbox Health Check
 
-- `http://honcho-memory-prod:8080/healthz` -> `200 OK` via Tailscale DNS.
-- Backend API server confirmed running on `100.71.144.114:8080`.
-- `/` returns `401` unauthenticated (auth boundary confirmed in T10 artifact).
-- Browser navigation to `/` and `/docs` blocked by local proxy `ERR_INVALID_AUTH_CREDENTIALS` — browser environment limitation, not a console defect.
+- `http://honcho-memory-prod:8080/healthz` -> `Connection timed out` — `honcho-memory-prod` VM offline at `10.42.0.9`.
+- **Note:** The VM is not reachable (100% packet loss). Tailscale sandbox deploy of honcho-memory-console is pending.
+- Backend API server (T10) was confirmed running at `100.71.144.114:8080` in the T10 artifact (`run-1782095965-30c0fb8f`).
+- `/` returns `401` unauthenticated when reachable (auth boundary confirmed in T10 artifact).
 
 ### Screenshots Captured
 
@@ -527,7 +527,16 @@ All verified against `http://127.0.0.1:4178` (vite preview serving production bu
 
 ### Rework Items
 
-None identified. All acceptance criteria met.
+**T11 Rework — `_safe_route` sentinel fix (run-1782105994-40b2f608):**
+- Issue: `test_unmatched_api_paths_are_collapsed_before_telemetry_or_audit_persistence` failed with `AssertionError: assert '/api/unmatched' in {'/api/unknown'}`.
+- Root cause: `_safe_route` used `str(route or "/api/unknown")`. When `route=None`, `None or "/api/unknown"` evaluates to `"/api/unknown"` — but when `route=""` (empty string), `"" or "/api/unknown"` evaluates to `"/api/unknown"`. However, `_safe_route` was being called with `""` as input in some paths, and `str("")` = `""` which then fell through to `/api/unknown` instead of the intended `/api/unmatched`.
+- The constant `_UNMATCHED_API_ROUTE = "/api/unmatched"` existed but was never used as the fallback in `_safe_route`.
+- Fix: explicit `if route is None or route == "": return _UNMATCHED_API_ROUTE` at the top of `_safe_route`.
+- Commit: `54a8e31` — `fix(console): _safe_route returns /api/unmatched for None/empty inputs`.
+- Result: `uv run --frozen pytest console/backend/tests -q` -> `39 passed in 5.32s` (previously 1 failed, 38 passed).
+- Backend tests: 39/39 PASS.
+- Frontend tests: 18/18 PASS.
+- Frontend build: `tsc --noEmit && vite build` -> `✓ built in 223ms`, 26 modules transformed.
 
 ### Visual Quality Assessment
 
@@ -542,5 +551,6 @@ None identified. All acceptance criteria met.
 
 ## Planned QA Evidence
 
-- Browser/Playwright evidence against deployed console in T11/T11B. ✓ DONE (partial — Tailscale sandbox accessible via `/healthz`; full UI blocked by local proxy).
+- Browser/Playwright evidence against deployed console in T11/T11B. **PARTIAL** — vite preview production build smoke passed (3/3 playwright smoke); full deployed browser QA blocked by `honcho-memory-prod` VM offline.
 - Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface. ✓ DONE via vite preview production build.
+- Tailscale sandbox deploy: **BLOCKED** — VM offline (`10.42.0.9` unreachable). T11B post-deploy verification requires VM to be running.
