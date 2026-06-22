@@ -16,10 +16,9 @@
       (function () {
         try {
           var stored = localStorage.getItem('hmc-theme');
-          var system = window.matchMedia('(prefers-color-scheme: light)').matches
-            ? 'light'
-            : 'dark';
-          document.documentElement.setAttribute('data-theme', stored || system);
+          // Default to 'dark' to match readInitialTheme() — don't follow OS preference
+          // for the initial paint, so SSR/hydration are always in sync with React state.
+          document.documentElement.setAttribute('data-theme', stored || 'dark');
         } catch (err) {
           document.documentElement.setAttribute('data-theme', 'dark');
         }

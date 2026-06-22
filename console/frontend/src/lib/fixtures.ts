@@ -5,6 +5,7 @@ const earlier = new Date('2026-06-19T15:51:00.000Z').toISOString();
 
 export const FIXTURE_META = {
   fixtureOnly: true,
+  generatedAt: now,
   note: 'Non-health sections use explicit development fixtures until their assigned integration increments land.',
 };
 
@@ -182,7 +183,57 @@ export const agentsFixture: AgentRow[] = [
     alerts: [],
     sources: ['development_fixture'],
   },
+  {
+    agentId: 'sophie-atc',
+    displayName: 'Sophie ATC',
+    tenantId: 'sitiouno-sales',
+    runtimeVm: 'voice-sandbox',
+    tailnetIp: '100.64.22.19',
+    environment: 'staging',
+    honchoWorkspace: 'sophie-atc',
+    aiPeer: 'Sophie',
+    humanPeer: 'Lead-Operator',
+    tokenFingerprint: 'sha256:bb72d01acf88',
+    tokenScope: 'workspace:sophie-atc:read',
+    tokenStatus: 'mis-scoped',
+    lastWriteAt: '2026-06-19T14:14:00.000Z',
+    memoryCounts: { sessions: 32, messages: 980, documents: 18, conclusions: 166, peerCardEntries: 21 },
+    queueState: { pending: 4, inProgress: 1, completed: 121, errors: 2, status: 'degraded' },
+    apiActivity: { requests1h: 11, requests24h: 209, errorRate: 0.024, p95LatencyMs: 240 },
+    vmHealth: { status: 'degraded', cpuPercent: 57, memoryPercent: 72, diskPercent: 61, serviceState: 'active' },
+    alerts: ['token_scope_review', 'queue_errors'],
+    sources: ['sample_registry_fixture'],
+  },
+  {
+    agentId: 'legacy-import',
+    displayName: 'Legacy Import Worker',
+    tenantId: 'sitiouno-archive',
+    runtimeVm: 'retired-worker-vm',
+    tailnetIp: null,
+    environment: 'archived',
+    honchoWorkspace: 'archive-imports',
+    aiPeer: 'ArchiveWorker',
+    humanPeer: null,
+    tokenFingerprint: 'sha256:c0ffee789abc',
+    tokenScope: 'workspace:archive-imports',
+    tokenStatus: 'expired',
+    lastWriteAt: '2026-06-12T08:30:00.000Z',
+    memoryCounts: { sessions: 4, messages: 42, documents: 11, conclusions: 9, peerCardEntries: 2 },
+    queueState: { pending: 0, inProgress: 0, completed: 42, errors: 0, status: 'unknown' },
+    apiActivity: { requests1h: 0, requests24h: 0, errorRate: 0, p95LatencyMs: null },
+    vmHealth: { status: 'offline', cpuPercent: null, memoryPercent: null, diskPercent: null, serviceState: 'inactive' },
+    alerts: ['token_expired', 'vm_offline'],
+    sources: ['sample_registry_fixture'],
+  },
 ];
+
+
+export const agentRegistrySnapshot = {
+  fixtureOnly: true,
+  generatedAt: now,
+  source: 'sample-agent-registry-fixture',
+  agents: agentsFixture,
+};
 
 export const workspacesFixture: WorkspaceSummaryRow[] = [
   { workspace: 'hermes', peers: 14, sessions: 128, conclusions: 812, lastActivityAt: earlier },

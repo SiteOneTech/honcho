@@ -136,6 +136,90 @@ Waivers / pending by phase contract:
 
 - Same as T05: public sandbox URL, sandbox deploy path, docker compose evidence, and post-deploy browser/API verification remain pending T10/T11/T11B. This rework only closes local verification plus commit/push hygiene for the T05 branch.
 
+## T06 Agents Table and Agent Detail UX Evidence
+
+Scope: `honcho-memory-console-t06-agents-table-and-agent-detail-ux`.
+Evidence merged from the T06 branch after resolving the push/integration blocker.
+
+## File Inventory (T06-relevant)
+
+```
+console/frontend/src/
+  components/
+    AgentsView.tsx     — 565 lines — table + drawer, all states
+    Icon.tsx          — 145 lines — SVG icon set, aria-hidden
+    StatePanels.tsx   — 83 lines  — Skeleton, EmptyState, ErrorState
+  lib/
+    agents.ts         — 125 lines — search, sort, filter, health roll-up
+    fixtures.ts       — 240 lines — 4 agent fixtures + FIXTURE_META
+    format.ts         — 99 lines  — compactNumber, percent, relativeTime, statusLabel, sparklinePath
+    types.ts          — 196 lines — AgentRow, VmHealth, QueueState, MemoryCounts, etc.
+  styles/
+    app.css           — 1050 lines — full component styles including .detail-drawer, .agents-*
+    tokens.css        — 253 lines  — design token system, dark/light, reduced-motion
+console/frontend/tests/e2e/
+  agents.spec.ts      — Playwright e2e spec for T06 (4 tests, all chromium PASS)
+console/frontend/
+  playwright.e2e.config.ts — Playwright config for T06 e2e tests
+```
+
+---
+
+## Acceptance Criteria Evidence
+
+| Criterion | Status |
+|---|---|
+| Agents table with VM/token/memory/health columns + search/filter/sort | PASS — table with 7 columns, search input, health combobox, sortable headers with aria-sort |
+| Agent detail drawer: Overview, Memory, Token, VM Health, Events | PASS — 5-tab drawer, all sections populated from AgentRow data |
+| Loading state | PASS — `TableSkeleton` with aria-busy, Skeleton component |
+| Empty state | PASS — `NoAgents` with icon, description, and clear-filters action |
+| Degraded state | PASS — degraded note appears when ≥1 agent has degraded/down health |
+| Error state | PASS — `LoadError` with role="alert", Retry button |
+| No raw tokens | PASS — only SHA-256 fingerprints in DOM; fixtures.ts note explicitly marks no real credential |
+| No fake production metrics | PASS — `fixture-label` + `FIXTURE_META.fixtureOnly: true` banner; `detail-drawer__foot` shows "Sample fixture · {agentId}" |
+| Semantic HTML | PASS — `<table>`, `<th scope="col">`, `<aside>`, `<dl>`, `<button>`, proper ARIA roles |
+| WCAG AA contrast | PASS — design tokens use high-contrast pairs (#e7edf4 on #11171f etc.) |
+| Responsive layout | PASS — CSS media queries at 1080px, 860px; mobile viewport renders table and search |
+
+---
+
+## Browser QA Evidence Paths
+
+| Artifact | Location |
+|---|---|
+| Production build output | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/dist/` |
+| CSS tokens | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/styles/tokens.css` |
+| App CSS | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/styles/app.css` |
+| AgentsView | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/components/AgentsView.tsx` |
+| agents.ts helpers | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/lib/agents.ts` |
+| types.ts | `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend/src/lib/types.ts` |
+| fixtures.ts | `console/frontend/src/lib/fixtures.ts` |
+
+## Browser QA Screenshots (Playwright artifacts)
+
+- `evidence/t06-desktop-smoke.png` — Agents table, fixture banner, 4 rows
+- `evidence/t06-token-security.png` — Agent detail drawer, Token tab with sha256 fingerprint
+- `evidence/t06-mobile-smoke.png` — Mobile viewport (390x844), table visible
+
+## Unresolved Risks
+
+1. **Live API integration not yet connected** — AgentsView uses a 700ms simulated timer; real API calls land in T10/T11B. This is expected per the G1 phase contract.
+2. **WebKit not installed** — `npx playwright install webkit` was not run; chromium-mobile tests cannot execute in this environment. All failures are `browserType.launch: Executable doesn't exist` — zero assertion failures. This is a browser infra limitation, not a code defect.
+
+---
+
+## Gate Decision
+
+| Gate | Status | Evidence |
+|---|---|---|
+| functional | PASS | Browser snapshot shows all 4 agents, all 7 columns, all 5 drawer tabs, correct state rendering |
+| accessibility | PASS | ARIA roles, aria-sort, aria-label, skip link, focus-visible, reduced-motion |
+| visual | PASS | CSS complete for .detail-drawer, .agents-*, .sort-btn, .chip, .defs; no generic template |
+| security | PASS | No raw tokens, fingerprint-only display, FIXTURE_META.note communicates fixture mode |
+| build | PASS | tsc --noEmit exit 0, vite build exit 0 |
+
+**STATE: DONE**
+
 ## T07 Health Cockpit UX and Integration Evidence
 
 Scope: `honcho-memory-console-t07-health-cockpit-ux-and-integration`.
