@@ -33,8 +33,9 @@ Reviewed: yes - Zeus Factory orchestrator review
 | `QA_GATES.md` | QA criteria | present / validated / reviewed |
 | `SECURITY_GATES.md` | Security criteria | present / validated / reviewed |
 | `QA_REPORT.md` | QA lifecycle evidence | seeded / pending implementation |
-| `SECURITY_REVIEW.md` | Security lifecycle evidence | seeded / pending implementation |
-| `DELIVERY_REPORT.md` | Delivery lifecycle evidence | seeded / pending implementation |
+| `SECURITY_REVIEW.md` | Security lifecycle evidence | T09S repo-level passed; deployed/browser security pending |
+| `QUALITY_REVIEW.md` | T11Q independent quality review evidence | present / blocked rework required |
+| `DELIVERY_REPORT.md` | Delivery lifecycle evidence | T10 private Tailscale deploy done; final delivery pending |
 | `CHANGELOG.md` | Change history | seeded / pending implementation |
 
 ## Builder Entry Instructions
@@ -66,6 +67,7 @@ Before any implementation task, a worker must read this index first, then:
 - `SECURITY_GATES.md`
 - `QA_REPORT.md`
 - `SECURITY_REVIEW.md`
+- `QUALITY_REVIEW.md`
 - `DELIVERY_REPORT.md`
 - `CHANGELOG.md`
 
