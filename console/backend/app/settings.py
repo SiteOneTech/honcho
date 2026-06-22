@@ -77,6 +77,11 @@ class ConsoleSettings(BaseSettings):
     local_health_postgres_connect_timeout_seconds: int = 2
     local_health_redis_socket_timeout_seconds: float = 2.0
 
+    # --- Frontend bundle ------------------------------------------------------
+    # When present, the backend serves the Vite production bundle from this
+    # directory so the private console can run as one auth-protected service.
+    frontend_static_dir: str | None = None
+
     # --- Agent registry / fleet discovery ------------------------------------
     # Fleet registry credentials stay server-side. The browser sees only whether
     # the adapter is configured plus a fingerprint for operational correlation.
@@ -187,5 +192,8 @@ ORDER BY agent_id
                 "docker_compose_directory_configured": (
                     self.local_health_docker_compose_directory is not None
                 ),
+            },
+            "frontend": {
+                "static_dir_configured": self.frontend_static_dir is not None,
             },
         }
