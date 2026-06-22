@@ -341,9 +341,11 @@ def _is_console_api_path(path: str) -> bool:
 
 
 def _safe_route(route: str) -> str:
-    path = str(route or "/api/unknown").split("?", 1)[0].split("#", 1)[0].strip()
+    if route is None or route == "":
+        return _UNMATCHED_API_ROUTE
+    path = str(route).split("?", 1)[0].split("#", 1)[0].strip()
     if not path:
-        path = "/api/unknown"
+        path = _UNMATCHED_API_ROUTE
     if not path.startswith("/"):
         path = f"/{path}"
     segments = [_safe_route_segment(segment) for segment in path.split("/")]
