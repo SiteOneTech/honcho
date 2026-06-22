@@ -227,14 +227,16 @@ http_code() {
 wait_for_console() {
   local bind_address="$1"
   local code=""
+  local health=""
   for _ in $(seq 1 45); do
     code="$(http_code "http://${bind_address}:8080/healthz")"
-    if [[ "$code" == "200" ]]; then
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' honcho-memory-console 2>/dev/null || true)"
+    if [[ "$code" == "200" && ( "$health" == "healthy" || "$health" == "none" ) ]]; then
       return 0
     fi
     sleep 2
   done
-  echo "ERROR: honcho-console did not become healthy at /healthz; last_http_code=${code:-000}" >&2
+  echo "ERROR: honcho-console did not become healthy; last_http_code=${code:-000}; last_docker_health=${health:-missing}" >&2
   (cd "$REPO_DIR" && docker compose -f "$COMPOSE_FILE_REL" ps console) >&2 || true
   return 1
 }

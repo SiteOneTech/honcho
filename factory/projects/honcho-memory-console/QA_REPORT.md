@@ -391,9 +391,38 @@ Waivers / pending by phase contract:
 
 - Same as T09: backend implementation only. Public sandbox URL, docker compose deployment evidence, browser screenshots, deployed browser/API verification, and independent security review remain pending T10/T11/T11B/T09S.
 
+## T10 Private Tailscale Deployment Packaging Evidence
+
+Scope: `honcho-memory-console-t10-deployment-packaging-for-honcho-memo`.
+Evidence updated: `2026-06-22T02:47:22Z`.
+
+Local checks run from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-110-t10-deployment-packaging-for-hon`:
+
+- `bash -n ops/honcho-memory-prod/deploy.sh ops/honcho-memory-prod/rollback.sh` -> `bash_syntax=ok`.
+- `uv run pytest console/backend/tests/test_deployment_packaging.py -q` -> `5 passed in 2.34s`.
+- `git diff --check` -> exit `0`.
+
+Runtime checks run on `honcho-memory-prod` after repo-managed deploy:
+
+- deploy command: `/srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/deploy.sh --branch factory/honcho-memory-console/inc-110-t10-deployment-packaging-for-hon --run-id run-1782095965-30c0fb8f`.
+- repo path: `/srv/factory/projects/honcho-memory-console/repo`, clean worktree.
+- systemd: `honcho.service=active`, `honcho-console.service=active`, `honcho-admin.service=inactive`, `honcho-update.timer=active`, `docker=active`.
+- Docker Compose console: `State=running`, `Health=healthy`, network `host`, compose file `ops/honcho-memory-prod/docker-compose.yml`.
+- API health: Tailscale `/healthz` -> `200`; unauthenticated Tailscale `/` -> `401`; local Honcho API `/health` -> `200`; authenticated `/api/settings` -> `200` in redacted deploy artifact.
+- runtime secret hygiene: `/etc/honcho-memory-console/runtime.env` exists with mode `600 root:root`; values were not printed or committed.
+
+Evidence paths:
+
+- Project-local evidence: `factory/projects/honcho-memory-console/evidence/t10-deployment-packaging/deploy-and-health-evidence.md`.
+- Remote artifact: `/srv/factory/artifacts/honcho-memory-console/run-1782095965-30c0fb8f/deploy-summary.txt`.
+- Repo runbook/rollback docs: `ops/honcho-memory-prod/README.md`, `ops/honcho-memory-prod/rollback.sh`.
+
+Waivers / pending by phase contract:
+
+- T10 is a private Tailscale sandbox deploy; no public `kidu.app` URL was exposed in this increment.
+- Browser UI screenshots, console error checks, accessibility pass, and deployed core-flow browser QA remain pending T11/T11B. Do not mark delivery/critical-readiness passed from T10 alone.
+
 ## Planned QA Evidence
 
-- Backend adapter/API contract tests for later increments.
-- API smoke output after deployment packaging.
-- Browser/Playwright evidence against deployed console.
-- Public sandbox URL and screenshots from deployed console.
+- Browser/Playwright evidence against deployed console in T11/T11B.
+- Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface.
