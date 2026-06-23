@@ -428,3 +428,48 @@ Waivers / pending by phase contract:
 - Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface.
 - Private Tailscale/internal URL or address tested. Public internet URL is not required and should not be treated as a blocker.
 - Per-view live-data verification for Overview, Agents, Agent detail, Memory, Health, Telemetry, Audit, and Settings.
+
+## T13 Live Data Wiring and Internal Tailscale Interface Review Evidence
+
+Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc`.
+Evidence updated: `2026-06-23T15:12:06Z`.
+Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna`.
+
+### Acceptance criteria evidence
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| No public internet URL required/added | PASS | UI copy and `/api/overview` payload keep `private_tailscale_internal`; no `kidu.app` or public URL was added by T13. |
+| Overview live or unavailable | PASS | `/api/overview` is async and aggregates agent registry, local health, telemetry, audit, settings, and Honcho health/workspaces/queue when available; otherwise emits explicit Honcho unavailable alerts. Frontend calls `fetchOverviewSnapshot()` and renders `Overview backend unavailable` if unreachable. |
+| Agents live or unavailable | PASS | Agents table calls `fetchAgentRegistry()` -> `/api/agents`; error state is `Agent registry unavailable`; no `agentsFixture` import/render in `AgentsView.tsx`. |
+| Agent detail live or unavailable | PASS | Drawer refreshes with `fetchAgentDetail()` -> `/api/agents/{agent_id}` and shows `detail endpoint unavailable`/agent-scoped event stream unavailable rather than synthetic event rows. |
+| Memory live or unavailable | PASS | Memory page calls `fetchMemoryExplorerSnapshot()` and now renders `Memory backend unavailable` instead of falling back to production sample data when `/api/memory` is unreachable. |
+| Health live or unavailable | PASS | Health page calls `fetchServiceHealth()` and renders `Health backend unavailable`; no production health fixture fallback remains in `App.tsx`. |
+| Telemetry live or unavailable | PASS | Telemetry page calls `fetchTelemetrySnapshot()` -> `/api/telemetry`; renders `Telemetry backend unavailable` if unreachable. |
+| Audit live or unavailable | PASS | Audit page calls `fetchAuditEvents()` -> `/api/audit/events`; renders `Audit backend unavailable` if unreachable. |
+| Settings live or unavailable | PASS | Settings page calls `fetchSettingsSnapshot()` -> `/api/settings`; renders `Settings backend unavailable` if unreachable and displays sanitized configured flags only. |
+| No fixture-only production state | PASS | `search_files` over `console/frontend/src/App.tsx` and `console/frontend/src/components/AgentsView.tsx` for `overviewFixture|agentsFixture|telemetryFixture|auditFixture|providersFixture|FIXTURE_META|Sample fixture|Fixture mode|fixture fallback|setTimeout(() => setPhase('ready'` -> `total_count: 0` for both files. |
+
+### Local verification commands
+
+- Targeted RED/GREEN backend overview tests: `uv run --frozen pytest console/backend/tests/test_honcho_memory_adapters.py::test_overview_endpoint_aggregates_live_sources_without_fixture_scaffold console/backend/tests/test_honcho_memory_adapters.py::test_overview_endpoint_returns_truthful_unavailable_state_when_honcho_is_down -q` -> `2 passed in 4.94s`.
+- Backend suite: `uv run --frozen pytest console/backend/tests -q` -> `41 passed in 5.58s`.
+- Frontend dependency install for verification only: `npm ci` -> `added 31 packages`, `found 0 vulnerabilities`.
+- Frontend contract tests: `npm test` -> `21` tests passed, `0` failed.
+- Frontend production build: `npm run build` -> TypeScript/Vite build passed; `26 modules transformed`; `dist/index.html`, CSS asset, and JS asset generated.
+- Browser smoke: `npm run smoke` -> Playwright Chromium `3 passed (8.1s)` for Health, Memory, and Shell/Agents; console/page error assertions remained empty.
+- Whitespace check: `git diff --check` -> exit `0`.
+- Claude Code static diff review: `claude -p ...` with edit tools disallowed -> `T13 Live Data Wiring — Review: PASS`, `No blockers found`.
+
+### Browser evidence paths
+
+- `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/live-data-wiring-evidence.md`.
+- `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-live-wiring-smoke.png` — sha256 `94ae5629a21b74350bbf342e0cc740563295b3af21a1fc11604a423b8f1e1fde`.
+- `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/mobile-live-wiring-smoke.png` — sha256 `24a48a81e182234f357fb288f79eccf855282123e49234bc8f24c0f0005b538d`.
+- `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-health-live-smoke.png` — sha256 `b957dbac159fe3fe708546f647d6c329bb5660ac99fec45d9f61e2923df2b57b`.
+- `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-memory-live-smoke.png` — sha256 `a13f2c86d6edb885efd10d2c5e4858cb694cc3d186cfe76d16760d42b6678955`.
+
+### Remaining blockers / rework
+
+- No Jean decision needed for T13: the increment keeps the console private inside Tailscale/internal boundaries and does not add a public URL.
+- Post-integration deployed verification on the private Tailscale address remains technical rework for T11B/T12; T13 completed local/browser evidence against the isolated worktree and route-intercepted live-shaped backend responses.

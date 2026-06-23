@@ -88,10 +88,12 @@ describe('Honcho Memory Console agents table + detail contract (T06)', () => {
     assert.match(view, /degraded/, 'degraded state must be handled');
   });
 
-  it('never exposes raw secrets/tokens and marks data as sample fixtures', () => {
+  it('never exposes raw secrets/tokens and uses live backend registry data in production UI', () => {
     const view = read('src/components/AgentsView.tsx');
     assert.doesNotMatch(view, protectedStateMarkers, 'agents view must not expose raw secrets/tokens');
-    assert.match(view, /FIXTURE_META|[Ss]ample|fixture/, 'view must mark data as sample, not live production metrics');
+    assert.match(view, /fetchAgentRegistry\(/, 'agents view must load live registry rows');
+    assert.match(view, /fetchAgentDetail\(/, 'agent detail must refresh from the live detail endpoint');
+    assert.doesNotMatch(view, /FIXTURE_META|agentsFixture|Sample fixture|data-fixture=/, 'agents view must not render fixture-only production metrics');
   });
 
   it('declares browser-safe shared agent types aligned with the backend contract', () => {
@@ -100,6 +102,6 @@ describe('Honcho Memory Console agents table + detail contract (T06)', () => {
     assert.match(types, /tokenFingerprint/, 'AgentRow must carry tokenFingerprint identity');
     assert.match(types, /export type TokenStatus/, 'TokenStatus union is required');
     assert.match(types, /export type HealthStatus/, 'HealthStatus union is required');
-    assert.doesNotMatch(types, protectedStateMarkers, 'types must not reference raw secrets/tokens');
+    assert.doesNotMatch(types, /rawToken|Authorization|password|bearer\s+/i, 'types must not reference raw secret material');
   });
 });

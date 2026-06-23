@@ -293,7 +293,7 @@
   animation: fade-rise var(--motion-base) var(--ease-out);
 }
 
-.fixture-banner {
+.boundary-banner {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -306,7 +306,7 @@
   font-size: var(--text-xs);
 }
 
-.fixture-banner strong {
+.boundary-banner strong {
   color: var(--color-degraded);
 }
 
@@ -1023,7 +1023,7 @@ table.data tbody tr[data-selected='true'] {
   gap: var(--space-4);
 }
 
-.fixture-label {
+.live-label {
   display: flex;
   align-items: center;
   gap: var(--space-2);

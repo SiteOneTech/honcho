@@ -22,6 +22,7 @@ Route map:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -177,24 +178,200 @@ def create_app(
         return redact_sensitive(settings.public_config())
 
     @application.get("/api/overview", tags=["console"])
-    def get_overview() -> dict[str, Any]:
-        """Return a scaffold operational overview (no live data yet)."""
+    async def get_overview() -> dict[str, Any]:
+        """Return live operational overview or explicit unavailable states."""
 
         public = settings.public_config()
+        alerts: list[dict[str, Any]] = []
+        sources: list[str] = [
+            "/api/agents",
+            "/api/health/services",
+            "/api/telemetry",
+            "/api/audit/events",
+            "/api/settings",
+        ]
+
+        agent_result = application.state.agent_registry.list_agents()
+        alerts.extend(_overview_alerts_from_models(agent_result.alerts))
+
+        health_response = application.state.local_health.collect()
+        health_counts = _overview_health_counts(health_response.checks)
+        health_status = _overview_health_status(health_response.checks)
+
+        telemetry = application.state.telemetry.snapshot()
+        audit = application.state.audit_trail.snapshot()
+
+        honcho_api: dict[str, Any] = {
+            "url": public["honcho_api"]["url"],
+            "token_configured": public["honcho_api"]["token_configured"],
+            "available": False,
+            "status": "unknown",
+            "summary": "Honcho API health has not been checked yet.",
+            "upstream_status": None,
+            "latency_ms": None,
+        }
+        workspaces_total: int | None = None
+        queue_total: int | None = None
+        queue_pending: int | None = None
+        queue_in_progress: int | None = None
+        queue_errors: int | None = None
+
+        try:
+            upstream_health = await adapter.health()
+        except HonchoAPIUnavailable:
+            alerts.append(
+                _overview_alert(
+                    "honcho_api_unavailable",
+                    "Honcho API is unavailable; memory metrics are shown as unavailable.",
+                    severity="critical",
+                    source="honcho_api",
+                )
+            )
+            honcho_api.update(
+                {
+                    "status": "unavailable",
+                    "summary": "Honcho API could not be reached from the console backend.",
+                }
+            )
+        except HonchoAPIUpstreamError as exc:
+            alerts.append(
+                _overview_alert(
+                    "honcho_api_error",
+                    "Honcho API returned an upstream error; memory metrics are shown as unavailable.",
+                    severity="warning",
+                    source="honcho_api",
+                )
+            )
+            honcho_api.update(
+                {
+                    "status": "degraded",
+                    "summary": "Honcho API returned an upstream error.",
+                    "upstream_status": exc.upstream_status,
+                }
+            )
+        else:
+            sources.append("/api/memory/health")
+            honcho_api.update(
+                {
+                    "available": True,
+                    "status": upstream_health.status,
+                    "summary": upstream_health.summary,
+                    "upstream_status": upstream_health.upstream_status,
+                    "latency_ms": upstream_health.latency_ms,
+                }
+            )
+            try:
+                workspaces = await adapter.list_workspaces()
+            except (HonchoAPIUnavailable, HonchoAPIUpstreamError):
+                alerts.append(
+                    _overview_alert(
+                        "honcho_workspaces_unavailable",
+                        "Workspace inventory could not be read from Honcho.",
+                        source="honcho_api",
+                    )
+                )
+            else:
+                sources.append("/api/memory/workspaces")
+                workspaces_total = workspaces.total
+
+            if settings.honcho_workspace:
+                try:
+                    queue = await adapter.get_queue_status(settings.honcho_workspace)
+                except (HonchoAPIUnavailable, HonchoAPIUpstreamError):
+                    alerts.append(
+                        _overview_alert(
+                            "honcho_queue_unavailable",
+                            "Queue counters could not be read for the configured workspace.",
+                            source="honcho_api",
+                        )
+                    )
+                else:
+                    sources.append("/api/memory/workspaces/{workspace_id}/queue")
+                    queue_total = queue.total_work_units
+                    queue_pending = queue.pending_work_units
+                    queue_in_progress = queue.in_progress_work_units
+                    queue_errors = max(
+                        queue.total_work_units
+                        - queue.completed_work_units
+                        - queue.in_progress_work_units
+                        - queue.pending_work_units,
+                        0,
+                    )
+
+        memory_total = _overview_memory_total(agent_result.agents)
+        layers = [
+            _overview_layer(
+                "api",
+                "Honcho API",
+                _overview_api_status(honcho_api),
+                str(honcho_api["summary"]),
+            ),
+            _overview_layer(
+                "agents",
+                "Agent registry",
+                "degraded" if agent_result.alerts else "healthy",
+                f"{len(agent_result.agents)} agent rows returned by the registry service.",
+            ),
+            _overview_layer(
+                "memory",
+                "Memory inventory",
+                "healthy" if workspaces_total is not None else "unknown",
+                (
+                    f"{workspaces_total} workspaces and queue counters returned by Honcho."
+                    if workspaces_total is not None
+                    else "Honcho memory inventory is unavailable from this overview snapshot."
+                ),
+            ),
+            _overview_layer(
+                "health",
+                "Service health",
+                health_status,
+                f"{health_counts['total']} local checks; {health_counts['degraded']} degraded, {health_counts['down']} down, {health_counts['unknown']} unknown.",
+            ),
+            _overview_layer(
+                "telemetry",
+                "Telemetry",
+                "healthy",
+                f"{telemetry.totals.requests_24h or 0} console API requests retained in the 24h telemetry window.",
+            ),
+            _overview_layer(
+                "audit",
+                "Audit trail",
+                "healthy",
+                f"{audit.total} audit events retained in memory.",
+            ),
+        ]
+        status = "ok" if all(layer["status"] == "healthy" for layer in layers) else "degraded"
         payload: dict[str, Any] = {
             "service": "honcho-memory-console",
-            "status": "scaffold",
+            "status": status,
+            "generated_at": _utc_now_iso(),
+            "privacy_boundary": {
+                "mode": "private_tailscale_internal",
+                "public_internet_url_required": False,
+                "public_internet_url_configured": False,
+                "evidence_hint": "Use the private Tailscale/internal console address for QA evidence.",
+            },
             "auth": public["auth"],
-            "honcho_api": {
-                "url": public["honcho_api"]["url"],
-                "token_configured": public["honcho_api"]["token_configured"],
-            },
+            "honcho_api": honcho_api,
             "metrics": {
-                "workspaces": None,
-                "peers": None,
-                "sessions": None,
-                "queue_depth": None,
+                "active_agents": len(agent_result.agents),
+                "workspaces": workspaces_total,
+                "memory_items": memory_total,
+                "queue_total": queue_total,
+                "queue_pending": queue_pending,
+                "queue_in_progress": queue_in_progress,
+                "queue_errors": queue_errors,
+                "requests_1h": telemetry.totals.requests_1h,
+                "requests_24h": telemetry.totals.requests_24h,
+                "error_rate": telemetry.totals.error_rate,
+                "p95_latency_ms": telemetry.totals.p95_latency_ms,
+                "audit_events": audit.total,
+                **health_counts,
             },
+            "layers": layers,
+            "alerts": alerts,
+            "sources": sources,
         }
         return redact_sensitive(payload)
 
@@ -414,6 +591,109 @@ def create_app(
 
     _mount_frontend_static(application, settings)
     return application
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+def _overview_alert(
+    code: str,
+    message: str,
+    *,
+    severity: str = "warning",
+    source: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "code": code,
+        "message": message,
+        "severity": severity,
+    }
+    if source:
+        payload["source"] = source
+    return payload
+
+
+def _overview_alerts_from_models(alerts: list[Any]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for alert in alerts:
+        model_dump = getattr(alert, "model_dump", None)
+        if callable(model_dump):
+            normalized.append(cast(dict[str, Any], model_dump(mode="json")))
+        elif isinstance(alert, dict):
+            normalized.append(cast(dict[str, Any], alert))
+        elif isinstance(alert, str):
+            normalized.append(_overview_alert(alert, alert, source="agent_registry"))
+    return normalized
+
+
+def _overview_memory_total(agents: list[Any]) -> int | None:
+    total = 0
+    found = False
+    for agent in agents:
+        counts = getattr(agent, "memory_counts", None)
+        if counts is None:
+            continue
+        for field in (
+            "sessions",
+            "messages",
+            "documents",
+            "conclusions",
+            "peer_card_entries",
+        ):
+            value = getattr(counts, field, None)
+            if isinstance(value, int):
+                total += value
+                found = True
+    return total if found else None
+
+
+def _overview_health_counts(checks: list[Any]) -> dict[str, int]:
+    counts = {"total": len(checks), "degraded": 0, "down": 0, "unknown": 0}
+    for check in checks:
+        status = getattr(check, "status", "unknown")
+        if status == "degraded":
+            counts["degraded"] += 1
+        elif status == "down":
+            counts["down"] += 1
+        elif status == "unknown":
+            counts["unknown"] += 1
+    return counts
+
+
+def _overview_health_status(checks: list[Any]) -> str:
+    statuses = {str(getattr(check, "status", "unknown")) for check in checks}
+    if "down" in statuses:
+        return "down"
+    if "degraded" in statuses:
+        return "degraded"
+    if "unknown" in statuses:
+        return "unknown"
+    return "healthy"
+
+
+def _overview_api_status(honcho_api: dict[str, Any]) -> str:
+    if honcho_api.get("available") is False and honcho_api.get("status") == "unavailable":
+        return "down"
+    status = honcho_api.get("status")
+    if status in {"healthy", "degraded", "down", "unknown"}:
+        return str(status)
+    if status in {"ok", "up", "pass"}:
+        return "healthy"
+    if status == "unavailable":
+        return "down"
+    return "unknown"
+
+
+def _overview_layer(
+    layer_id: str,
+    label: str,
+    status: str,
+    summary: str,
+) -> dict[str, str]:
+    if status not in {"healthy", "degraded", "down", "unknown"}:
+        status = "unknown"
+    return {"id": layer_id, "label": label, "status": status, "summary": summary}
 
 
 def _secret_or_none(value: Any) -> str | None:

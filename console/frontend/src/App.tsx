@@ -3,16 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Icon, type IconName } from './components/Icon';
 import { AgentsView } from './components/AgentsView';
 import { EmptyState, ErrorState, Skeleton } from './components/StatePanels';
-import {
-  FIXTURE_META,
-  auditFixture,
-  healthSnapshotFixture,
-  memoryExplorerFixture,
-  overviewFixture,
-  providersFixture,
-  telemetryFixture,
-} from './lib/fixtures';
-import { absoluteTime, compactNumber, relativeTime, sparklinePath, statusLabel } from './lib/format';
+import { absoluteTime, compactNumber, relativeTime, statusLabel } from './lib/format';
 import {
   HEALTH_GROUPS,
   fetchServiceHealth,
@@ -22,9 +13,17 @@ import {
   type HealthGroupId,
 } from './lib/health';
 import { fetchMemoryExplorerSnapshot } from './lib/memory';
+import {
+  fetchAuditEvents,
+  fetchOverviewSnapshot,
+  fetchSettingsSnapshot,
+  fetchTelemetrySnapshot,
+} from './lib/live';
 import { navigate, type RouteId, useRoute } from './lib/router';
 import { applyTheme, readInitialTheme, type ThemeMode } from './lib/theme';
 import type {
+  AuditEvent,
+  AuditEventsSnapshot,
   ConclusionSummary,
   HealthCheck,
   HealthServicesSnapshot,
@@ -34,7 +33,10 @@ import type {
   MemorySession,
   MemoryWorkspace,
   MessageSummary,
+  OverviewSnapshot,
   PeerCardEntry,
+  SettingsSnapshot,
+  TelemetrySnapshot,
 } from './lib/types';
 
 interface NavItem {
@@ -51,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'memory', label: 'Memory', icon: 'memory', description: 'Workspaces, peers, and conclusion inventory.' },
   { id: 'health', label: 'Health', icon: 'health', description: 'Service, storage, network, and update posture.' },
   { id: 'telemetry', label: 'Telemetry', icon: 'telemetry', description: 'Request, latency, and queue movement.' },
-  { id: 'audit', label: 'Audit', icon: 'audit', description: 'Read-only operator event trail.', badge: '4' },
+  { id: 'audit', label: 'Audit', icon: 'audit', description: 'Read-only operator event trail.' },
   { id: 'settings', label: 'Settings', icon: 'settings', description: 'Provider and console preferences.' },
 ];
 
@@ -172,7 +174,7 @@ function App() {
 
         <div className="rail__footer">
           <Icon name="shield" size={16} />
-          <span>Private by design · {FIXTURE_META.fixtureOnly ? 'Fixture mode' : 'Live mode'}</span>
+          <span>Private by design · Tailscale/internal only</span>
         </div>
       </aside>
 
@@ -200,7 +202,7 @@ function App() {
           </span>
           <div className="topbar__spacer" />
           <div className="topbar__actions">
-            <button className="icon-button" type="button" aria-label="Refresh dashboard fixtures">
+            <button className="icon-button" type="button" aria-label="Refresh active dashboard data">
               <Icon name="refresh" size={18} />
             </button>
             <button className="icon-button" type="button" aria-label="Toggle color mode" onClick={toggleTheme}>
@@ -214,7 +216,7 @@ function App() {
             Viewing {active.label}: {active.description}
           </div>
 
-          <div className="fixture-banner" data-live-health={route === 'health' ? 'true' : 'false'}>
+          <div className="boundary-banner" data-route={route}>
             <Icon name="alert" size={17} />
             <span>
               <strong>
@@ -222,13 +224,13 @@ function App() {
                   ? 'Live health integration.'
                   : route === 'memory'
                     ? 'Live memory integration.'
-                    : 'Fixture-supported shell.'}
+                    : 'Live backend wiring.'}
               </strong>{' '}
               {route === 'health'
-                ? 'The Health cockpit queries /api/health/services and falls back to an explicit offline state when the backend cannot be reached.'
+                ? 'The Health cockpit queries /api/health/services and shows an explicit unavailable state when the backend cannot be reached.'
                 : route === 'memory'
                   ? 'The Memory explorer queries /api/memory and keeps sensitive message content behind explicit disclosure controls.'
-                  : FIXTURE_META.note}
+                  : 'This private Tailscale console uses the backend API for this surface, or shows a truthful unavailable state instead of production sample data.'}
             </span>
           </div>
 
@@ -238,7 +240,7 @@ function App() {
               <h1>{copy.title}</h1>
               <p>{copy.description}</p>
             </div>
-            <StatusChip status={overviewFixture.layers[0]?.status ?? 'unknown'} label="API reachable" />
+            <StatusChip status="unknown" label="Private Tailnet" />
           </header>
 
           <Page route={route} />
@@ -292,25 +294,72 @@ function Metric({ label, value, detail, icon }: { label: string; value: string; 
 }
 
 function OverviewPage() {
-  const degradedLayers = overviewFixture.layers.filter((layer) => layer.status !== 'healthy');
+  const [snapshot, setSnapshot] = useState<OverviewSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadOverview = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await fetchOverviewSnapshot());
+    } catch {
+      setSnapshot(null);
+      setError('The backend /api/overview endpoint is unavailable or requires a valid private-console login.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={5} title="Overview is loading live backend summary data" />;
+  }
+
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Overview backend unavailable" hint="No production fallback data shown">
+        <ErrorState
+          title="Overview backend unavailable"
+          description="The overview could not reach /api/overview, so live summary metrics are unavailable instead of replaced with sample production data."
+          actionLabel="Retry overview"
+          onAction={loadOverview}
+        />
+      </Panel>
+    );
+  }
+
+  if (snapshot === null) return null;
+
+  const degradedLayers = snapshot.layers.filter((layer) => layer.status !== 'healthy');
   return (
     <>
       <section className="metric-strip" aria-label="Overview metrics">
-        <Metric label="Memory posture" value={`${overviewFixture.healthScore}%`} detail="Global confidence score" icon="pulse" />
-        <Metric label="Active agents" value={compactNumber(overviewFixture.activeAgents)} detail="Known console consumers" icon="agents" />
-        <Metric label="Workspaces" value={compactNumber(overviewFixture.workspaces)} detail="Memory namespaces tracked" icon="memory" />
-        <Metric label="Queue" value={compactNumber(overviewFixture.queue.pending)} detail={`${overviewFixture.queue.inProgress} in progress · ${overviewFixture.queue.errors} errors`} icon="health" />
+        <Metric label="Agents" value={compactNumber(snapshot.metrics.activeAgents)} detail="Live /api/agents rows" icon="agents" />
+        <Metric label="Workspaces" value={compactNumber(snapshot.metrics.workspaces)} detail="Honcho workspace inventory" icon="memory" />
+        <Metric label="Queue pending" value={compactNumber(snapshot.metrics.queuePending)} detail={`${compactNumber(snapshot.metrics.queueInProgress)} in progress · ${compactNumber(snapshot.metrics.queueErrors)} errors`} icon="health" />
+        <Metric label="API requests" value={compactNumber(snapshot.metrics.requests24h)} detail={`${compactNumber(snapshot.metrics.requests1h)} in the last hour`} icon="pulse" />
       </section>
 
+      {error ? (
+        <div className="health-cockpit__notice" role="status">
+          Overview refresh degraded: {error}
+        </div>
+      ) : null}
+
       <section className="grid grid--2">
-        <Panel title="Operational layers" hint="Status labels are always explicit">
+        <Panel title="Operational layers" hint={`Source: ${snapshot.source} · ${absoluteTime(snapshot.generatedAt)}`}>
           <div className="grid grid--health">
-            {overviewFixture.layers.map((layer) => (
+            {snapshot.layers.map((layer) => (
               <div className="health-card" key={layer.id}>
                 <div className="health-card__head">
                   <div>
                     <div className="health-card__layer">{layer.id}</div>
                     <strong>{layer.label}</strong>
+                    <div className="health-row__summary">{layer.summary}</div>
                   </div>
                   <StatusChip status={layer.status} />
                 </div>
@@ -318,23 +367,27 @@ function OverviewPage() {
             ))}
           </div>
           {degradedLayers.length === 0 ? (
-            <EmptyState title="All layers healthy" description="No degraded layers are present in this sample snapshot." icon="check" />
+            <EmptyState title="All live layers healthy" description="No degraded live layers are reported by /api/overview." icon="check" />
           ) : null}
         </Panel>
 
-        <Panel title="Signal watchlist" hint="Safe sample data">
-          {overviewFixture.alerts.map((alert) => (
-            <div className="health-row" key={alert.code}>
-              <div className="health-row__main">
-                <div className="health-row__label">{alert.message}</div>
-                <div className="health-row__summary">{alert.source ?? 'console'} · {alert.code}</div>
+        <Panel title="Signal watchlist" hint="Live alerts or explicit empty state">
+          {snapshot.alerts.length === 0 ? (
+            <EmptyState title="No active overview alerts" description="The backend returned no overview alerts for this live snapshot." icon="check" />
+          ) : (
+            snapshot.alerts.map((alert) => (
+              <div className="health-row" key={`${alert.code}:${alert.source ?? 'console'}`}>
+                <div className="health-row__main">
+                  <div className="health-row__label">{alert.message}</div>
+                  <div className="health-row__summary">{alert.source ?? 'console'} · {alert.code}</div>
+                </div>
+                <span className={`chip ${alert.severity === 'critical' ? 'chip--down' : alert.severity === 'warning' ? 'chip--degraded' : 'chip--info'}`}>
+                  <span className="chip__dot" aria-hidden="true" />
+                  {alert.severity}
+                </span>
               </div>
-              <span className={`chip ${alert.severity === 'warning' ? 'chip--degraded' : 'chip--info'}`}>
-                <span className="chip__dot" aria-hidden="true" />
-                {alert.severity}
-              </span>
-            </div>
-          ))}
+            ))
+          )}
         </Panel>
       </section>
     </>
@@ -362,8 +415,8 @@ function MemoryPage() {
       const next = await fetchMemoryExplorerSnapshot();
       setSnapshot(next);
     } catch {
-      setSnapshot(memoryExplorerFixture);
-      setError('The backend memory adapter is unavailable; showing explicit fixture fallback data.');
+      setSnapshot(null);
+      setError('The backend /api/memory endpoint is unavailable or requires a valid private-console login.');
     } finally {
       setIsLoading(false);
     }
@@ -377,13 +430,27 @@ function MemoryPage() {
     return <Skeleton rows={6} title="Memory explorer is loading workspace, peer, session, and conclusion metadata" />;
   }
 
-  const activeSnapshot = snapshot ?? memoryExplorerFixture;
-  const visibleWorkspaces = filterWorkspaces(activeSnapshot.workspaces, filter);
-  const visiblePeers = filterPeers(activeSnapshot.peers, filter);
-  const visibleCardEntries = filterPeerCard(activeSnapshot.peerCard.entries, filter);
-  const visibleSessions = filterSessions(activeSnapshot.sessions, filter);
-  const visibleMessages = filterMessages(activeSnapshot.messages, filter);
-  const visibleConclusions = filterConclusions(activeSnapshot.conclusions, filter);
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Memory backend unavailable" hint="No production fallback data shown">
+        <ErrorState
+          title="Memory backend unavailable"
+          description="The console could not reach /api/memory, so workspaces, peers, sessions, messages, and conclusions are unavailable instead of replaced with sample memory data."
+          actionLabel="Retry memory"
+          onAction={loadMemory}
+        />
+      </Panel>
+    );
+  }
+
+  if (snapshot === null) return null;
+
+  const visibleWorkspaces = filterWorkspaces(snapshot.workspaces, filter);
+  const visiblePeers = filterPeers(snapshot.peers, filter);
+  const visibleCardEntries = filterPeerCard(snapshot.peerCard.entries, filter);
+  const visibleSessions = filterSessions(snapshot.sessions, filter);
+  const visibleMessages = filterMessages(snapshot.messages, filter);
+  const visibleConclusions = filterConclusions(snapshot.conclusions, filter);
 
   const toggleMessage = (messageId: string) => {
     setRevealedMessages((current) => {
@@ -402,12 +469,12 @@ function MemoryPage() {
       <div className="memory-toolbar">
         <div>
           <div className="memory-toolbar__source">
-            Source: {activeSnapshot.source === 'live' ? 'backend /api/memory' : 'fixture fallback'} · Loaded{' '}
-            {absoluteTime(activeSnapshot.loadedAt)}
+            Source: backend /api/memory · Loaded{' '}
+            {absoluteTime(snapshot.loadedAt)}
           </div>
           <div className="memory-toolbar__summary">
-            {activeSnapshot.workspaces.length} workspaces · {activeSnapshot.peers.length} peers · {activeSnapshot.sessions.length}{' '}
-            sessions · {activeSnapshot.messages.length} messages · {activeSnapshot.conclusions.length} conclusions
+            {snapshot.workspaces.length} workspaces · {snapshot.peers.length} peers · {snapshot.sessions.length}{' '}
+            sessions · {snapshot.messages.length} messages · {snapshot.conclusions.length} conclusions
           </div>
         </div>
         <label className="memory-filter">
@@ -433,22 +500,22 @@ function MemoryPage() {
       ) : null}
 
       <section className="metric-strip" aria-label="Memory explorer metrics">
-        <Metric label="Workspaces" value={compactNumber(activeSnapshot.workspaces.length)} detail={activeSnapshot.selectedWorkspaceId ?? 'No workspace selected'} icon="memory" />
-        <Metric label="Peers" value={compactNumber(activeSnapshot.peers.length)} detail={activeSnapshot.selectedPeerId ? 'Selected peer active' : 'No peer selected'} icon="agents" />
-        <Metric label="Queue pending" value={compactNumber(activeSnapshot.queue?.pendingWorkUnits ?? 0)} detail={`${compactNumber(activeSnapshot.queue?.completedWorkUnits ?? 0)} completed`} icon="health" />
-        <Metric label="Messages" value={compactNumber(activeSnapshot.messages.length)} detail="Sensitive message content hidden by default" icon="shield" />
+        <Metric label="Workspaces" value={compactNumber(snapshot.workspaces.length)} detail={snapshot.selectedWorkspaceId ?? 'No workspace selected'} icon="memory" />
+        <Metric label="Peers" value={compactNumber(snapshot.peers.length)} detail={snapshot.selectedPeerId ? 'Selected peer active' : 'No peer selected'} icon="agents" />
+        <Metric label="Queue pending" value={compactNumber(snapshot.queue?.pendingWorkUnits ?? 0)} detail={`${compactNumber(snapshot.queue?.completedWorkUnits ?? 0)} completed`} icon="health" />
+        <Metric label="Messages" value={compactNumber(snapshot.messages.length)} detail="Sensitive message content hidden by default" icon="shield" />
       </section>
 
       <section className="grid grid--2 memory-grid">
         <Panel title="Workspace explorer" hint="Live workspace metadata">
-          <WorkspaceExplorerTable workspaces={visibleWorkspaces} selectedWorkspaceId={activeSnapshot.selectedWorkspaceId} />
+          <WorkspaceExplorerTable workspaces={visibleWorkspaces} selectedWorkspaceId={snapshot.selectedWorkspaceId} />
         </Panel>
 
         <Panel title="Peers" hint="Peer metadata and configuration keys">
-          <PeersTable peers={visiblePeers} selectedPeerId={activeSnapshot.selectedPeerId} />
+          <PeersTable peers={visiblePeers} selectedPeerId={snapshot.selectedPeerId} />
         </Panel>
 
-        <Panel title="Peer card" hint={`${activeSnapshot.peerCard.total} entries reported`}>
+        <Panel title="Peer card" hint={`${snapshot.peerCard.total} entries reported`}>
           <PeerCardList entries={visibleCardEntries} />
         </Panel>
 
@@ -457,22 +524,22 @@ function MemoryPage() {
             label="representation"
             revealed={peerContextRevealed}
             onReveal={() => setPeerContextRevealed((current) => !current)}
-            text={activeSnapshot.representation.representation}
-            sensitive={activeSnapshot.representation.sensitive}
+            text={snapshot.representation.representation}
+            sensitive={snapshot.representation.sensitive}
           />
         </Panel>
 
         <Panel title="Context" hint="Peer-to-target context">
           <PeerContextDisclosure
-            contextEntries={activeSnapshot.context.peerCard}
+            contextEntries={snapshot.context.peerCard}
             peerContextRevealed={peerContextRevealed}
-            representation={activeSnapshot.context.representation}
-            sensitive={activeSnapshot.context.sensitive}
+            representation={snapshot.context.representation}
+            sensitive={snapshot.context.sensitive}
           />
         </Panel>
 
         <Panel title="Sessions" hint="Metadata only">
-          <SessionsTable sessions={visibleSessions} selectedSessionId={activeSnapshot.selectedSessionId} />
+          <SessionsTable sessions={visibleSessions} selectedSessionId={snapshot.selectedSessionId} />
         </Panel>
 
         <Panel title="Messages" hint="Reveal sensitive content only when needed">
@@ -877,17 +944,18 @@ function HealthPage() {
     );
   }
 
-  const activeSnapshot = snapshot ?? healthSnapshotFixture;
-  const grouped = groupHealthChecks(activeSnapshot.checks);
-  const totals = healthTotals(activeSnapshot.checks);
+  if (snapshot === null) return null;
+
+  const grouped = groupHealthChecks(snapshot.checks);
+  const totals = healthTotals(snapshot.checks);
 
   return (
     <section className="health-cockpit" aria-label="Health checks by API, Deriver, Storage, Network, LLM, Update, and Host">
       <div className="health-cockpit__toolbar">
         <div>
           <div className="health-cockpit__meta">
-            Source: {activeSnapshot.source === 'live' ? 'backend /api/health/services' : 'fixture fallback'} · Last checked{' '}
-            {absoluteTime(activeSnapshot.generatedAt)}
+            Source: backend /api/health/services · Last checked{' '}
+            {absoluteTime(snapshot.generatedAt)}
           </div>
           <div className="health-cockpit__summary">
             {totals.total} checks · {totals.degraded} degraded · {totals.offline} offline · {totals.unknown} unknown
@@ -990,99 +1058,284 @@ function EvidencePills({ evidence }: { evidence: HealthEvidencePill[] }) {
 }
 
 function TelemetryPage() {
+  const [snapshot, setSnapshot] = useState<TelemetrySnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadTelemetry = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await fetchTelemetrySnapshot());
+    } catch {
+      setSnapshot(null);
+      setError('The backend /api/telemetry endpoint is unavailable or requires a valid private-console login.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTelemetry();
+  }, [loadTelemetry]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={4} title="Telemetry is loading live request aggregates" />;
+  }
+
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Telemetry backend unavailable" hint="No production fallback data shown">
+        <ErrorState
+          title="Telemetry backend unavailable"
+          description="The console could not reach /api/telemetry, so live request and latency aggregates are unavailable instead of replaced with sample metrics."
+          actionLabel="Retry telemetry"
+          onAction={loadTelemetry}
+        />
+      </Panel>
+    );
+  }
+
+  if (snapshot === null) return null;
+
   return (
-    <section className="grid grid--2">
-      {telemetryFixture.map((series) => (
-        <Panel key={series.label} title={series.label} hint={`${series.delta >= 0 ? '+' : ''}${series.delta} ${series.unit}`}>
-          <Sparkline points={series.points} />
-          <div className="metric__value">
-            {compactNumber(series.current)} <small>{series.unit}</small>
-          </div>
+    <>
+      <section className="metric-strip" aria-label="Telemetry metrics">
+        <Metric label="Requests 1h" value={compactNumber(snapshot.totals.requests1h)} detail="Console API requests" icon="telemetry" />
+        <Metric label="Requests 24h" value={compactNumber(snapshot.totals.requests24h)} detail={`Source: ${snapshot.source}`} icon="pulse" />
+        <Metric label="Error rate" value={snapshot.totals.errorRate === null ? '—' : `${(snapshot.totals.errorRate * 100).toFixed(1)}%`} detail="4xx/5xx share" icon="alert" />
+        <Metric label="p95 latency" value={snapshot.totals.p95LatencyMs === null ? '—' : `${Math.round(snapshot.totals.p95LatencyMs)}ms`} detail="Observed API route latency" icon="health" />
+      </section>
+
+      <section className="grid grid--2">
+        <Panel title="Token-safe telemetry scope" hint={`Generated ${absoluteTime(snapshot.generatedAt)}`}>
+          <dl className="defs">
+            <dt>Token fingerprint</dt>
+            <dd className="mono fingerprint">{snapshot.tokenFingerprint ?? 'not configured'}</dd>
+            <dt>Token scope</dt>
+            <dd>{snapshot.tokenScope}</dd>
+            <dt>Status</dt>
+            <dd><StatusChip status={snapshot.status === 'ok' ? 'healthy' : 'degraded'} /></dd>
+          </dl>
         </Panel>
-      ))}
-      <Skeleton rows={3} title="Telemetry adapter loading preview" />
-    </section>
+
+        <Panel title="Route aggregates" hint="Safe request metadata only">
+          {snapshot.routes.length === 0 ? (
+            <EmptyState title="No telemetry routes yet" description="No console API requests are retained in the telemetry window yet." icon="inbox" />
+          ) : (
+            <TelemetryRoutesTable routes={snapshot.routes} />
+          )}
+        </Panel>
+      </section>
+    </>
   );
 }
 
-function Sparkline({ points }: { points: number[] }) {
-  const path = sparklinePath(points, 220, 48);
+function TelemetryRoutesTable({ routes }: { routes: TelemetrySnapshot['routes'] }) {
   return (
-    <svg className="spark" viewBox="0 0 220 48" role="img" aria-label="Telemetry sparkline">
-      <path className="spark__area" d={path.area} />
-      <path d={path.line} />
-    </svg>
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Telemetry route aggregates</caption>
+        <thead>
+          <tr>
+            <th scope="col">Route</th>
+            <th scope="col">Requests</th>
+            <th scope="col">Errors</th>
+            <th scope="col">p95</th>
+          </tr>
+        </thead>
+        <tbody>
+          {routes.map((route) => (
+            <tr key={route.route}>
+              <td className="mono">{route.route}</td>
+              <td>{compactNumber(route.requests)}</td>
+              <td>{compactNumber(route.errors)}</td>
+              <td>{route.p95LatencyMs === null ? '—' : `${Math.round(route.p95LatencyMs)}ms`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 function AuditPage() {
+  const [snapshot, setSnapshot] = useState<AuditEventsSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadAudit = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await fetchAuditEvents());
+    } catch {
+      setSnapshot(null);
+      setError('The backend /api/audit/events endpoint is unavailable or requires a valid private-console login.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAudit();
+  }, [loadAudit]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={4} title="Audit trail is loading live operator events" />;
+  }
+
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Audit backend unavailable" hint="No production fallback data shown">
+        <ErrorState
+          title="Audit backend unavailable"
+          description="The console could not reach /api/audit/events, so live event history is unavailable instead of replaced with sample audit rows."
+          actionLabel="Retry audit"
+          onAction={loadAudit}
+        />
+      </Panel>
+    );
+  }
+
+  if (snapshot === null) return null;
+
   return (
     <section className="grid grid--2">
-      <Panel title="Event trail" hint="Operator-visible outcomes">
-        <div className="table-wrap">
-          <table className="data">
-            <caption className="sr-only">Console audit events</caption>
-            <thead>
-              <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Actor</th>
-                <th scope="col">Action</th>
-                <th scope="col">Outcome</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditFixture.map((event) => (
-                <tr key={event.id}>
-                  <td>{relativeTime(event.at)}</td>
-                  <td>{event.actor}</td>
-                  <td>{event.action}</td>
-                  <td>
-                    <span className={`chip ${event.outcome === 'ok' ? 'chip--healthy' : event.outcome === 'denied' ? 'chip--degraded' : 'chip--down'}`}>
-                      <span className="chip__dot" aria-hidden="true" />
-                      {event.outcome}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <Panel title="Event trail" hint={`${snapshot.total} live events · ${snapshot.source}`}>
+        {snapshot.events.length === 0 ? (
+          <EmptyState title="No audit events yet" description="The live audit trail is reachable but no events are retained yet." icon="inbox" />
+        ) : (
+          <AuditEventsTable events={snapshot.events} />
+        )}
       </Panel>
-      <Panel title="Exception state" hint="Accessible failure copy">
-        <ErrorState
-          title="Audit adapter unavailable"
-          description="The shell keeps the operator in context and offers a safe retry without dumping internal payloads."
+      <Panel title="Audit posture" hint="Read-only console">
+        <EmptyState
+          title="Audit data is sanitized"
+          description="Events contain route templates, status, and token fingerprints only. Request bodies, response bodies, and headers are not rendered."
+          icon="shield"
         />
       </Panel>
     </section>
   );
 }
 
+function AuditEventsTable({ events }: { events: AuditEvent[] }) {
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <caption className="sr-only">Console audit events</caption>
+        <thead>
+          <tr>
+            <th scope="col">Time</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Action</th>
+            <th scope="col">Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((event) => (
+            <tr key={event.id}>
+              <td>{relativeTime(event.at)}</td>
+              <td>{event.actor}</td>
+              <td className="mono">{event.action}</td>
+              <td>
+                <span className={`chip ${event.outcome === 'ok' ? 'chip--healthy' : event.outcome === 'denied' ? 'chip--degraded' : 'chip--down'}`}>
+                  <span className="chip__dot" aria-hidden="true" />
+                  {event.outcome}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function SettingsPage() {
+  const [snapshot, setSnapshot] = useState<SettingsSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSettings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await fetchSettingsSnapshot());
+    } catch {
+      setSnapshot(null);
+      setError('The backend /api/settings endpoint is unavailable or requires a valid private-console login.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  if (isLoading && snapshot === null) {
+    return <Skeleton rows={4} title="Settings are loading sanitized runtime configuration" />;
+  }
+
+  if (error && snapshot === null) {
+    return (
+      <Panel title="Settings backend unavailable" hint="No production fallback data shown">
+        <ErrorState
+          title="Settings backend unavailable"
+          description="The console could not reach /api/settings, so sanitized runtime configuration is unavailable instead of replaced with sample provider flags."
+          actionLabel="Retry settings"
+          onAction={loadSettings}
+        />
+      </Panel>
+    );
+  }
+
+  if (snapshot === null) return null;
+
+  const providers = Object.entries(snapshot.secrets.providerKeysConfigured);
   return (
     <section className="grid grid--2">
       <Panel title="Provider posture" hint="Configured flags only">
-        {providersFixture.map((provider) => (
-          <div className="health-row" key={provider.id}>
-            <div className="health-row__main">
-              <div className="health-row__label">{provider.label}</div>
-              <div className="health-row__summary">{provider.scope}</div>
+        {providers.length === 0 ? (
+          <EmptyState title="No provider flags reported" description="The backend did not report configured provider key flags." icon="settings" />
+        ) : (
+          providers.map(([provider, configured]) => (
+            <div className="health-row" key={provider}>
+              <div className="health-row__main">
+                <div className="health-row__label">{provider}</div>
+                <div className="health-row__summary">Server-side credential value is never rendered.</div>
+              </div>
+              <ConfiguredChip configured={configured} />
             </div>
-            <span className={`chip ${provider.configured ? 'chip--healthy' : 'chip--unknown'}`}>
-              <span className="chip__dot" aria-hidden="true" />
-              {provider.configured ? 'Configured' : 'Not configured'}
-            </span>
-          </div>
-        ))}
+          ))
+        )}
       </Panel>
-      <Panel title="Console preferences" hint="Persisted in browser storage">
-        <EmptyState
-          title="Theme is tokenized"
-          description="Dark and light modes share the same semantic color system, focus ring, spacing rhythm, and state surfaces."
-          icon="settings"
-        />
+      <Panel title="Console runtime" hint="Sanitized backend settings">
+        <dl className="defs">
+          <dt>Auth</dt>
+          <dd>{snapshot.auth.configured ? 'configured' : 'not configured'}</dd>
+          <dt>Honcho API</dt>
+          <dd>{snapshot.honchoApi.url}</dd>
+          <dt>Token fingerprint</dt>
+          <dd className="mono fingerprint">{snapshot.honchoApi.tokenFingerprint ?? 'not configured'}</dd>
+          <dt>Agent registry</dt>
+          <dd>{snapshot.agentRegistry.displayName} · {snapshot.agentRegistry.honchoWorkspace}</dd>
+          <dt>Private boundary</dt>
+          <dd>Tailscale/internal only; no public internet URL configured by this console.</dd>
+        </dl>
       </Panel>
     </section>
+  );
+}
+
+function ConfiguredChip({ configured }: { configured: boolean }) {
+  return (
+    <span className={`chip ${configured ? 'chip--healthy' : 'chip--unknown'}`}>
+      <span className="chip__dot" aria-hidden="true" />
+      {configured ? 'Configured' : 'Not configured'}
+    </span>
   );
 }
 

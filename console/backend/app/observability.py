@@ -340,15 +340,15 @@ def _is_console_api_path(path: str) -> bool:
     return path == "/api" or path.startswith("/api/")
 
 
-def _safe_route(route: str) -> str:
-    path = str(route or "/api/unknown").split("?", 1)[0].split("#", 1)[0].strip()
-    if not path:
-        path = "/api/unknown"
+def _safe_route(route: str | None) -> str:
+    path = str(route or _UNMATCHED_API_ROUTE).split("?", 1)[0].split("#", 1)[0].strip()
+    if not path or path == "/api/unknown":
+        path = _UNMATCHED_API_ROUTE
     if not path.startswith("/"):
         path = f"/{path}"
     segments = [_safe_route_segment(segment) for segment in path.split("/")]
     sanitized = "/".join(segments)
-    return sanitized or "/api/unknown"
+    return sanitized or _UNMATCHED_API_ROUTE
 
 
 def _safe_route_segment(segment: str) -> str:

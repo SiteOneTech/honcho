@@ -79,3 +79,49 @@ Rollback was documented but not executed because T11/T11B need the deployed cons
 - Browser QA evidence.
 - Security review result.
 - Rollback command.
+
+## T13 Live Data Wiring Delivery Update
+
+Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc`.
+Updated: `2026-06-23T15:12:06Z`.
+Branch/worktree: `factory/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna` at `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna`.
+
+### Delivery boundary
+
+- Public internet URL: not required, not added, and intentionally not used for T13.
+- Private/internal boundary preserved: Overview payload and UI copy identify `private_tailscale_internal`; existing T10 private Tailscale surface remains the deployment boundary for later post-integration checks.
+- T13 did not deploy or change credentials/secrets.
+
+### What changed
+
+- Added backend `/api/overview` live aggregation across agent registry, local health, telemetry, audit, settings, and Honcho API health/workspace/queue data with explicit unavailable alerts.
+- Added frontend live API client `console/frontend/src/lib/live.ts` for Overview, Agents, Agent detail, Telemetry, Audit, and Settings.
+- Removed production use of fixture-only Overview/Agents/Telemetry/Audit/Settings state from `App.tsx` and `AgentsView.tsx`.
+- Converted Memory and Health failure paths from production fixture fallback to explicit `Memory backend unavailable` / `Health backend unavailable` states.
+- Replaced synthetic Agent detail event rows with explicit agent-scoped event stream unavailable copy.
+- Preserved development/test fixture files only for contract tests and Playwright route interception.
+- Fixed unmatched `/api/*` telemetry/audit route collapse to `/api/unmatched` so attacker-controlled paths are not persisted as route labels.
+
+### Verification summary
+
+- Backend: `uv run --frozen pytest console/backend/tests -q` -> `41 passed in 5.58s`.
+- Frontend contracts: `npm test` -> `21 passed`, `0 failed`.
+- Frontend production build: `npm run build` -> TypeScript/Vite passed, `26 modules transformed`.
+- Browser smoke: `npm run smoke` -> Playwright Chromium `3 passed (8.1s)` with desktop/mobile screenshots and clean console/page-error assertions.
+- Whitespace: `git diff --check` -> exit `0`.
+- Fixture-only production marker scan over `App.tsx` and `AgentsView.tsx` -> `total_count: 0`.
+- Claude Code static diff review: `claude -p ...` with edit tools disallowed -> `T13 Live Data Wiring — Review: PASS`, `No blockers found`.
+
+### Evidence paths
+
+- QA report section: `factory/projects/honcho-memory-console/QA_REPORT.md` -> `T13 Live Data Wiring and Internal Tailscale Interface Review Evidence`.
+- Project-local evidence note: `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/live-data-wiring-evidence.md`.
+- Desktop screenshot: `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-live-wiring-smoke.png`.
+- Mobile screenshot: `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/mobile-live-wiring-smoke.png`.
+- Health screenshot: `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-health-live-smoke.png`.
+- Memory screenshot: `factory/projects/honcho-memory-console/evidence/t13-live-data-wiring/desktop-memory-live-smoke.png`.
+
+### Remaining delivery work
+
+- No Jean decision is needed for T13.
+- Post-integration deployed browser/API verification on the private Tailscale/internal address remains technical rework for T11B/T12. No public URL should be created for that verification.

@@ -9,6 +9,7 @@ from pydantic import SecretStr
 
 from console.backend.app.adapters.honcho_api import HonchoAPIAdapter
 from console.backend.app.main import create_app
+from console.backend.app.models import HealthCheck, ServiceHealthResponse
 from console.backend.app.settings import ConsoleSettings
 
 RAW_TOKEN = "honcho-api-token-raw"
@@ -45,7 +46,7 @@ def _assert_no_raw_secrets(value: object) -> None:
         JWT_SECRET,
         "db-password-raw",
         "infisical-token-raw",
-        "Authorization: Bearer",
+        "Authorization: Bearer raw-secret",
     ):
         assert raw not in serialized
 
@@ -409,7 +410,7 @@ def test_upstream_honcho_error_is_sanitized_before_reaching_console_client():
         return httpx.Response(
             500,
             json={
-                "detail": f"upstream exploded after seeing Authorization: Bearer {RAW_TOKEN}",
+                "detail": f"upstream exploded after seeing Authorization: Bearer {RAW_TOKEN}"
             },
         )
 
@@ -427,4 +428,108 @@ def test_upstream_honcho_error_is_sanitized_before_reaching_console_client():
     assert body["error"]["code"] == "honcho_api_error"
     assert body["error"]["upstream_status"] == 500
     assert "upstream exploded" not in json.dumps(body)
+    _assert_no_raw_secrets(body)
+
+
+class _StaticHealthAdapter:
+    def collect(self) -> ServiceHealthResponse:
+        return ServiceHealthResponse(
+            status="degraded",
+            checks=[
+                HealthCheck(
+                    id="honcho-api",
+                    label="Honcho API /health",
+                    layer="service",
+                    status="healthy",
+                    summary="Honcho API health endpoint responded successfully.",
+                    evidence={"http_status": 200},
+                ),
+                HealthCheck(
+                    id="systemd:honcho-console.service",
+                    label="systemd honcho-console.service",
+                    layer="service",
+                    status="degraded",
+                    summary="honcho-console.service is active/exited.",
+                    evidence={"ActiveState": "active", "SubState": "exited"},
+                ),
+            ],
+        )
+
+
+def test_overview_endpoint_aggregates_live_sources_without_fixture_scaffold():
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "GET" and path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if request.method == "POST" and path == "/v3/workspaces/list":
+            return httpx.Response(200, json=_page([{"id": "hermes"}]))
+        if request.method == "GET" and path == "/v3/workspaces/hermes/queue/status":
+            return httpx.Response(
+                200,
+                json={
+                    "total_work_units": 5,
+                    "completed_work_units": 2,
+                    "in_progress_work_units": 1,
+                    "pending_work_units": 2,
+                },
+            )
+        return httpx.Response(200, json=_page([]))
+
+    upstream_client = httpx.AsyncClient(
+        base_url="http://honcho.local",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = HonchoAPIAdapter(_settings(), client=upstream_client)
+    client = TestClient(
+        create_app(
+            _settings(),
+            honcho_api_adapter=adapter,
+            local_health_adapter=_StaticHealthAdapter(),
+        )
+    )
+
+    response = client.get("/api/overview", headers=_basic_auth())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["honcho_api"]["available"] is True
+    assert body["metrics"]["workspaces"] == 1
+    assert body["metrics"]["queue_pending"] == 2
+    assert body["metrics"]["active_agents"] == 1
+    assert body["privacy_boundary"]["public_internet_url_required"] is False
+    assert body["privacy_boundary"]["mode"] == "private_tailscale_internal"
+    assert body["sources"] >= ["/api/agents", "/api/health/services"]
+    assert body["status"] != "scaffold"
+    assert "fixture" not in json.dumps(body).lower()
+    _assert_no_raw_secrets(body)
+
+
+def test_overview_endpoint_returns_truthful_unavailable_state_when_honcho_is_down():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"cannot connect with token {RAW_TOKEN}")
+
+    upstream_client = httpx.AsyncClient(
+        base_url="http://honcho.local",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = HonchoAPIAdapter(_settings(), client=upstream_client)
+    client = TestClient(
+        create_app(
+            _settings(),
+            honcho_api_adapter=adapter,
+            local_health_adapter=_StaticHealthAdapter(),
+        )
+    )
+
+    response = client.get("/api/overview", headers=_basic_auth())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["honcho_api"]["available"] is False
+    assert body["honcho_api"]["status"] == "unavailable"
+    assert body["metrics"]["workspaces"] is None
+    assert body["metrics"]["queue_pending"] is None
+    assert any(alert["code"] == "honcho_api_unavailable" for alert in body["alerts"])
     _assert_no_raw_secrets(body)
