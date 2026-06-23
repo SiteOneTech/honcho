@@ -34,3 +34,17 @@ Branch: `factory/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna`
 
 - No secret/destructive/private-boundary decision is required from Jean for this increment.
 - Deployed private Tailscale verification of this branch remains for T11B/T12 after integration/deploy; T13 local Playwright evidence uses route-intercepted live-shaped backend responses and does not add any public URL.
+
+## Rework closure: worktree hygiene and verification
+
+Updated: 2026-06-23T15:52:17Z
+
+- Increment integration rejected closure because the worktree had uncommitted screenshot artifacts.
+- Dirty files were historical Playwright screenshot outputs under T05/T07/T08 evidence folders, not T13 code or T13 evidence files.
+- Claude Code read-only closure audit returned `CLAUDE_CODE_AUDIT_OK restore`: restore the T05/T07/T08 screenshot side effects rather than committing them as T13 because committing them would invalidate their documented historical hashes.
+- Fresh backend verification: `uv run --frozen pytest console/backend/tests -q` -> `41 passed in 5.41s`.
+- Fresh frontend verification: `npm test` -> `21` tests passed, `0` failed; `npm run build` -> TypeScript/Vite passed with `26 modules transformed`.
+- Fresh browser smoke: first `CI=1 npm run smoke` attempt failed because a stale T06 Vite preview occupied `127.0.0.1:4178`; `ss -H -ltnp 'sport = :4178'` identified `pid=246220`, `kill 246220` freed the port, and rerun `CI=1 npm run smoke` -> `3 passed (13.0s)`.
+- Smoke regenerated historical T05/T07/T08 screenshot outputs; those generated side effects were restored again to keep the T13 branch clean and scoped.
+- `git diff --check` -> exit `0`.
+- Push verification before this documentation update: local and remote T13 branch SHA were both `1d817b68e3f5135faaa54c15ac44c5ce74ae05ea`; `git push origin HEAD:refs/heads/factory/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna` -> `Everything up-to-date`.

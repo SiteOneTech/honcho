@@ -473,3 +473,29 @@ Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live
 
 - No Jean decision needed for T13: the increment keeps the console private inside Tailscale/internal boundaries and does not add a public URL.
 - Post-integration deployed verification on the private Tailscale address remains technical rework for T11B/T12; T13 completed local/browser evidence against the isolated worktree and route-intercepted live-shaped backend responses.
+
+## T13 Rework Closure Evidence - Worktree Hygiene and Push Verification
+
+Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc` rework after increment integration rejected terminal closure because the worktree had uncommitted screenshot artifacts.
+Evidence updated: `2026-06-23T15:52:17Z`.
+
+Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna/console/frontend`:
+
+- `git status --short --branch` initially showed only historical Playwright screenshot side effects under T05/T07/T08 evidence folders; no T13 code files were dirty.
+- Claude Code read-only closure audit (`claude-anthropic-code -p ... --tools "" --max-turns 1 --output-format text`) -> `CLAUDE_CODE_AUDIT_OK restore`; decision: restore T05/T07/T08 historical screenshot artifacts rather than commit them as T13 because their documented historical hashes would be invalidated.
+- `git restore -- <T05/T07/T08 screenshot paths>` -> worktree returned to clean scope before verification.
+- `uv run --frozen pytest console/backend/tests -q` -> `41 passed in 5.41s`.
+- `npm test` -> frontend contract suites `21` tests passed, `0` failed, duration `149.465712ms`.
+- `npm run build` -> TypeScript/Vite production build passed; `26 modules transformed`; generated `dist/index.html`, CSS asset, and JS asset.
+- First `CI=1 npm run smoke` attempt -> blocked by local infrastructure: `http://127.0.0.1:4178 is already used`.
+- Root-cause check: `ss -H -ltnp 'sport = :4178'` showed stale T06 Vite preview listener on `127.0.0.1:4178` (`pid=246220`) from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-070-t06-agents-table-and-agent-detai/console/frontend`.
+- `kill 246220` plus `ss -H -ltnp 'sport = :4178'` -> port `4178` freed.
+- `CI=1 npm run smoke` rerun -> Playwright Chromium `3 passed (13.0s)` across Health, Memory, and Shell/Agents flows.
+- Smoke rerun regenerated T05/T07/T08 historical screenshot paths; these generated side effects were restored again with `git restore -- <T05/T07/T08 screenshot paths>` to keep the T13 branch scoped and keep previous evidence hashes valid.
+- `git diff --check` -> exit `0`.
+- `git push origin HEAD:refs/heads/factory/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna` -> `Everything up-to-date`; local and remote branch SHA both `1d817b68e3f5135faaa54c15ac44c5ce74ae05ea` before this documentation update.
+
+Closure note:
+
+- The rework blocker was branch/worktree hygiene only, not a product blocker and not a Jean decision.
+- Public internet URL remains intentionally absent; T13 delivery evidence continues to use private/internal boundary language only.
