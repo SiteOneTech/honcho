@@ -53,6 +53,15 @@ export interface AgentVmHealth {
   serviceState: string | null;
 }
 
+export interface RegistryAlert {
+  code: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  source: string | null;
+}
+
+export type AlertValue = string | RegistryAlert;
+
 export interface AgentRow {
   agentId: string;
   displayName: string;
@@ -71,8 +80,25 @@ export interface AgentRow {
   queueState: QueueState;
   apiActivity: AgentApiActivity;
   vmHealth: AgentVmHealth;
-  alerts: string[];
+  alerts: AlertValue[];
   sources: string[];
+}
+
+export interface AgentRegistrySnapshot {
+  service: string;
+  status: 'ok' | 'degraded';
+  total: number;
+  agents: AgentRow[];
+  alerts: RegistryAlert[];
+  source: 'live';
+}
+
+export interface AgentDetailSnapshot {
+  service: string;
+  status: 'ok' | 'degraded';
+  agent: AgentRow;
+  alerts: RegistryAlert[];
+  source: 'live';
 }
 
 export interface WorkspaceSummaryRow {
@@ -190,4 +216,139 @@ export interface MemoryExplorerSnapshot {
   sessions: MemorySession[];
   messages: MessageSummary[];
   conclusions: ConclusionSummary[];
+}
+
+export interface OverviewLayer {
+  id: string;
+  label: string;
+  status: HealthStatus;
+  summary: string;
+}
+
+export interface OverviewMetrics {
+  activeAgents: number | null;
+  workspaces: number | null;
+  memoryItems: number | null;
+  queueTotal: number | null;
+  queuePending: number | null;
+  queueInProgress: number | null;
+  queueErrors: number | null;
+  requests1h: number | null;
+  requests24h: number | null;
+  errorRate: number | null;
+  p95LatencyMs: number | null;
+  auditEvents: number | null;
+  total: number | null;
+  degraded: number | null;
+  down: number | null;
+  unknown: number | null;
+}
+
+export interface OverviewSnapshot {
+  service: string;
+  status: 'ok' | 'degraded';
+  generatedAt: string;
+  privacyBoundary: {
+    mode: string;
+    publicInternetUrlRequired: boolean;
+    publicInternetUrlConfigured: boolean;
+    evidenceHint: string;
+  };
+  honchoApi: {
+    available: boolean;
+    status: string;
+    summary: string;
+    upstreamStatus: number | null;
+    latencyMs: number | null;
+    tokenConfigured: boolean;
+  };
+  metrics: OverviewMetrics;
+  layers: OverviewLayer[];
+  alerts: RegistryAlert[];
+  sources: string[];
+  source: 'live';
+}
+
+export interface TelemetryRouteStat {
+  route: string;
+  requests: number;
+  errors: number;
+  errorRate: number | null;
+  p95LatencyMs: number | null;
+}
+
+export interface TelemetrySnapshot {
+  service: string;
+  status: 'ok' | 'degraded';
+  generatedAt: string;
+  tokenFingerprint: string | null;
+  tokenScope: string;
+  totals: AgentApiActivity;
+  routes: TelemetryRouteStat[];
+  source: 'live';
+}
+
+export interface AuditEvent {
+  id: string;
+  at: string;
+  actor: 'operator' | 'unknown';
+  action: string;
+  outcome: 'ok' | 'denied' | 'error';
+  route: string;
+  method: string;
+  statusCode: number;
+  tokenFingerprint: string | null;
+  tokenScope: string;
+}
+
+export interface AuditEventsSnapshot {
+  service: string;
+  status: 'ok' | 'degraded';
+  total: number;
+  events: AuditEvent[];
+  source: 'live';
+}
+
+export interface SettingsSnapshot {
+  auth: {
+    enabled: boolean;
+    configured: boolean;
+    usernameConfigured: boolean;
+  };
+  honchoApi: {
+    url: string;
+    tokenConfigured: boolean;
+    tokenFingerprint: string | null;
+  };
+  agentRegistry: {
+    agentId: string;
+    displayName: string;
+    tenantId: string;
+    runtimeVm: string;
+    tailnetIp: string | null;
+    environment: string;
+    honchoWorkspace: string;
+    aiPeer: string | null;
+    humanPeer: string | null;
+    fleetRegistryConfigured: boolean;
+    fleetRegistryFingerprint: string | null;
+  };
+  secrets: {
+    jwtSecretConfigured: boolean;
+    databaseUrlConfigured: boolean;
+    redisUrlConfigured: boolean;
+    infisicalTokenConfigured: boolean;
+    providerKeysConfigured: Record<string, boolean>;
+  };
+  localHealth: {
+    systemdUnits: string[];
+    updateTimerUnit: string;
+    dockerServices: string[];
+    diskPaths: string[];
+    dockerComposeDirectoryConfigured: boolean;
+  };
+  frontend: {
+    staticDirConfigured: boolean;
+  };
+  source: 'live';
 }

@@ -1,21 +1,21 @@
 /**
  * AgentsView — Agents table and agent detail for the Honcho Memory Console.
  *
- * This view implements T06 acceptance criteria:
+ * This view implements the console agent registry contract:
  * - Searchable, filterable, sortable agents table
  * - Agent detail drawer with Overview, Memory, Token, VM Health, Events sections
  * - Loading / empty / degraded / error states
  * - Fingerprint-only token identity (no raw tokens)
- * - All data marked as sample fixtures
+ * - Live backend data with explicit unavailable states
  */
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Icon } from './Icon';
 import { EmptyState, ErrorState, Skeleton } from './StatePanels';
-import { agentsFixture } from '../lib/fixtures';
 import { AGENT_COLUMNS } from '../lib/agents';
-import type { AgentRow, HealthStatus } from '../lib/types';
+import { fetchAgentDetail, fetchAgentRegistry } from '../lib/live';
+import type { AgentRow, HealthStatus, RegistryAlert } from '../lib/types';
 import {
   agentHealth,
   filterAgentsByHealth,
@@ -35,14 +35,6 @@ const HEALTH_CHIP: Record<HealthStatus, string> = {
   down: 'chip--down',
   unknown: 'chip--unknown',
 };
-
-interface AgentEvent {
-  id: string;
-  at: string | null;
-  action: string;
-  actor: string;
-  outcome: 'ok' | 'error' | 'denied';
-}
 
 function HealthChip({ status }: { status: HealthStatus }) {
   return (
@@ -100,12 +92,12 @@ function NoAgents({
 // Error state
 // ---------------------------------------------------------------------------
 
-function LoadError({ onRetry }: { onRetry: () => void }) {
+function LoadError({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <ErrorState
       icon="alert"
-      title="Failed to load agents"
-      description="Could not retrieve the agent registry. The operator console remains usable for other sections."
+      title="Agent registry unavailable"
+      description={error ?? 'Could not retrieve the live agent registry. No fixture agent rows are shown as production state.'}
       actionLabel="Retry"
       onAction={onRetry}
     />
@@ -200,9 +192,13 @@ function AgentRow_({
 
 function AgentDetail({
   agent,
+  detailError,
+  detailPhase,
   onClose,
 }: {
   agent: AgentRow;
+  detailError: string | null;
+  detailPhase: 'idle' | 'loading' | 'ready' | 'error';
   onClose: () => void;
 }) {
   const health = agentHealth(agent);
@@ -212,34 +208,6 @@ function AgentDetail({
   >('Overview');
 
   const sections = ['Overview', 'Memory', 'Token', 'VM Health', 'Events'] as const;
-
-  const eventBaseAt = agent.lastWriteAt ?? new Date(0).toISOString();
-  const eventBaseMs = Date.parse(eventBaseAt);
-
-  // Synthetic events derived from fixture state (no real event log in fixture mode).
-  const events: AgentEvent[] = [
-    {
-      id: 'evt_detail_1',
-      at: eventBaseAt,
-      action: 'memory.write',
-      actor: agent.agentId,
-      outcome: health === 'healthy' ? 'ok' : 'error',
-    },
-    {
-      id: 'evt_detail_2',
-      at: new Date(eventBaseMs - 5 * 60 * 1000).toISOString(),
-      action: 'queue.poll',
-      actor: agent.agentId,
-      outcome: agent.queueState.errors === 0 ? 'ok' : 'error',
-    },
-    {
-      id: 'evt_detail_3',
-      at: new Date(eventBaseMs - 12 * 60 * 1000).toISOString(),
-      action: 'token.validate',
-      actor: agent.agentId,
-      outcome: agent.tokenStatus === 'valid' ? 'ok' : 'denied',
-    },
-  ];
 
   return (
     <aside className="detail-drawer" aria-label={`${agent.displayName} detail`}>
@@ -362,45 +330,29 @@ function AgentDetail({
         )}
 
         {activeSection === 'Events' && (
-          <div className="table-wrap">
-            <table className="data">
-              <caption className="sr-only">Recent agent events</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Time</th>
-                  <th scope="col">Action</th>
-                  <th scope="col">Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((evt) => (
-                  <tr key={evt.id}>
-                    <td>{relativeTime(evt.at)}</td>
-                    <td className="mono">{evt.action}</td>
-                    <td>
-                      <span
-                        className={`chip ${
-                          evt.outcome === 'ok'
-                            ? 'chip--healthy'
-                            : evt.outcome === 'denied'
-                              ? 'chip--degraded'
-                              : 'chip--down'
-                        }`}
-                      >
-                        <span className="chip__dot" aria-hidden="true" />
-                        {evt.outcome}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EmptyState
+            icon="audit"
+            title="Agent-scoped event stream unavailable"
+            description="The live backend exposes the global audit trail at /api/audit/events, but it does not expose per-agent event history yet. No synthetic events are shown."
+          />
         )}
       </div>
 
+      {detailPhase === 'loading' ? (
+        <div className="health-cockpit__notice" role="status">
+          Refreshing detail from /api/agents/{agent.agentId}…
+        </div>
+      ) : null}
+      {detailError ? (
+        <div className="health-cockpit__notice" role="status">
+          Detail refresh degraded: {detailError}
+        </div>
+      ) : null}
+
       <div className="detail-drawer__foot">
-        <span>Sample fixture · {agent.agentId}</span>
+        <span>
+          {detailPhase === 'error' ? 'Live list row · detail endpoint unavailable' : 'Live backend · /api/agents/{agent_id}'} · {agent.agentId}
+        </span>
       </div>
     </aside>
   );
@@ -416,18 +368,65 @@ export function AgentsView() {
   const [sortField, setSortField] = useState<string>('displayName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedAgent, setSelectedAgent] = useState<AgentRow | null>(null);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [registryAlerts, setRegistryAlerts] = useState<RegistryAlert[]>([]);
   const [phase, setPhase] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [detailPhase, setDetailPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [detailError, setDetailError] = useState<string | null>(null);
 
-  // Simulate async load in fixture mode.
-  // In live mode this would be replaced by a real API call.
-  useEffect(() => {
-    const timer = setTimeout(() => setPhase('ready'), 700);
-    return () => clearTimeout(timer);
+  const loadAgents = useCallback(async () => {
+    setPhase('loading');
+    setError(null);
+    try {
+      const snapshot = await fetchAgentRegistry();
+      setAgents(snapshot.agents);
+      setRegistryAlerts(snapshot.alerts);
+      setSelectedAgent((current) => {
+        if (!current) return null;
+        return snapshot.agents.find((agent) => agent.agentId === current.agentId) ?? null;
+      });
+      setPhase('ready');
+    } catch {
+      setAgents([]);
+      setRegistryAlerts([]);
+      setSelectedAgent(null);
+      setError('The backend /api/agents endpoint is unavailable or requires a valid private-console login.');
+      setPhase('error');
+    }
   }, []);
 
+  useEffect(() => {
+    void loadAgents();
+  }, [loadAgents]);
+
+  useEffect(() => {
+    if (!selectedAgent) {
+      setDetailPhase('idle');
+      setDetailError(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailPhase('loading');
+    setDetailError(null);
+    fetchAgentDetail(selectedAgent.agentId)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setSelectedAgent(snapshot.agent);
+        setDetailPhase('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDetailError('The backend /api/agents/{agent_id} detail endpoint could not be refreshed; showing the live list row only.');
+        setDetailPhase('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent?.agentId]);
+
   const handleRetry = () => {
-    setPhase('loading');
-    setTimeout(() => setPhase('ready'), 700);
+    void loadAgents();
   };
 
   if (phase === 'loading') {
@@ -441,13 +440,12 @@ export function AgentsView() {
   if (phase === 'error') {
     return (
       <div className="agents-view">
-        <LoadError onRetry={handleRetry} />
+        <LoadError error={error} onRetry={handleRetry} />
       </div>
     );
   }
 
-  const allAgents = agentsFixture;
-  const searched = searchAgents(allAgents, query);
+  const searched = searchAgents(agents, query);
   const filtered = filterAgentsByHealth(searched, healthFilter);
   const sorted = sortAgents(filtered, sortField as keyof AgentRow, sortDir);
 
@@ -468,15 +466,14 @@ export function AgentsView() {
     setSelectedAgent(null);
   }
 
-  // Determine if any agent is degraded (for degraded state test).
   const hasDegraded = sorted.some((a) => agentHealth(a) === 'degraded');
 
   return (
-    <div className="agents-view" data-fixture="true">
-      {/* Fixture banner */}
-      <div className="fixture-label" role="status">
+    <div className="agents-view">
+      <div className="live-label" role="status">
         <Icon name="alert" size={14} />
-        Sample fixture data · Agent inventory is illustrative
+        Live backend data · /api/agents · {agents.length} rows
+        {registryAlerts.length > 0 ? ` · ${registryAlerts.length} registry alert${registryAlerts.length === 1 ? '' : 's'}` : ''}
       </div>
 
       {/* Controls */}
@@ -565,6 +562,8 @@ export function AgentsView() {
         {selectedAgent && (
           <AgentDetail
             agent={selectedAgent}
+            detailError={detailError}
+            detailPhase={detailPhase}
             onClose={() => setSelectedAgent(null)}
           />
         )}

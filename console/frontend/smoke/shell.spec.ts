@@ -27,10 +27,92 @@ test('premium shell renders, navigates, toggles theme, and captures UI evidence'
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  await page.route('**/api/memory/**', async (route) => {
+  await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown;
-    if (path === '/api/memory/workspaces') {
+    if (path === '/api/overview') {
+      body = {
+        service: 'honcho-memory-console',
+        status: 'ok',
+        generated_at: '2026-06-23T15:00:00Z',
+        privacy_boundary: {
+          mode: 'private_tailscale_internal',
+          public_internet_url_required: false,
+          public_internet_url_configured: false,
+          evidence_hint: 'Use the private internal URL for evidence.',
+        },
+        honcho_api: { available: true, status: 'healthy', summary: 'Smoke backend online.', upstream_status: 200, latency_ms: 12, token_configured: true },
+        metrics: { active_agents: 1, workspaces: 1, memory_items: 7, queue_total: 4, queue_pending: 1, queue_in_progress: 0, queue_errors: 0, requests_1h: 3, requests_24h: 9, error_rate: 0, p95_latency_ms: 24, audit_events: 1, total: 3, degraded: 0, down: 0, unknown: 0 },
+        layers: [{ id: 'api', label: 'Honcho API', status: 'healthy', summary: 'Smoke API layer.' }],
+        alerts: [],
+        sources: ['/api/overview', '/api/agents'],
+      };
+    } else if (path === '/api/agents') {
+      body = {
+        service: 'honcho-memory-console',
+        status: 'ok',
+        total: 1,
+        source: 'live',
+        alerts: [],
+        agents: [{
+          agent_id: 'honcho-console-worker',
+          display_name: 'Honcho Console Worker',
+          tenant_id: 'sitiouno',
+          runtime_vm: 'honcho-memory-prod',
+          tailnet_ip: '100.64.0.10',
+          environment: 'internal-smoke',
+          honcho_workspace: 'hermes',
+          ai_peer: 'Zeus',
+          human_peer: 'Jean-Garcia',
+          token_fingerprint: 'sha256:9f3ab1c2d4e5',
+          token_scope: 'console:read',
+          token_status: 'valid',
+          last_write_at: '2026-06-23T15:00:00Z',
+          memory_counts: { sessions: 1, messages: 1, documents: 0, conclusions: 1, peer_card_entries: 1 },
+          queue_state: { pending: 1, in_progress: 0, completed: 3, errors: 0, status: 'healthy' },
+          api_activity: { requests_1h: 3, requests_24h: 9, error_rate: 0, p95_latency_ms: 24 },
+          vm_health: { status: 'online', cpu_percent: 18, memory_percent: 42, disk_percent: 55, service_state: 'active' },
+          alerts: [],
+          sources: ['/api/agents'],
+        }],
+      };
+    } else if (path === '/api/agents/honcho-console-worker') {
+      body = {
+        service: 'honcho-memory-console',
+        status: 'ok',
+        source: 'live',
+        alerts: [],
+        agent: {
+          agent_id: 'honcho-console-worker',
+          display_name: 'Honcho Console Worker',
+          tenant_id: 'sitiouno',
+          runtime_vm: 'honcho-memory-prod',
+          tailnet_ip: '100.64.0.10',
+          environment: 'internal-smoke',
+          honcho_workspace: 'hermes',
+          ai_peer: 'Zeus',
+          human_peer: 'Jean-Garcia',
+          token_fingerprint: 'sha256:9f3ab1c2d4e5',
+          token_scope: 'console:read',
+          token_status: 'valid',
+          last_write_at: '2026-06-23T15:00:00Z',
+          memory_counts: { sessions: 1, messages: 1, documents: 0, conclusions: 1, peer_card_entries: 1 },
+          queue_state: { pending: 1, in_progress: 0, completed: 3, errors: 0, status: 'healthy' },
+          api_activity: { requests_1h: 3, requests_24h: 9, error_rate: 0, p95_latency_ms: 24 },
+          vm_health: { status: 'online', cpu_percent: 18, memory_percent: 42, disk_percent: 55, service_state: 'active' },
+          alerts: [],
+          sources: ['/api/agents/{agent_id}'],
+        },
+      };
+    } else if (path === '/api/health/services') {
+      body = { service: 'honcho-memory-console', status: 'ok', generated_at: '2026-06-23T15:00:00Z', source: 'live', checks: [{ id: 'api', label: 'Console API', layer: 'service', status: 'healthy', summary: 'Smoke health online.', last_checked_at: '2026-06-23T15:00:00Z', latency_ms: 10, evidence: { endpoint: '/api/health/services' }, safe_to_show: true }] };
+    } else if (path === '/api/telemetry') {
+      body = { service: 'honcho-memory-console', status: 'ok', generated_at: '2026-06-23T15:00:00Z', token_fingerprint: 'sha256:9f3ab1c2d4e5', token_scope: 'console:read', totals: { requests_1h: 3, requests_24h: 9, error_rate: 0, p95_latency_ms: 24 }, routes: [{ route: '/api/overview', requests: 3, errors: 0, error_rate: 0, p95_latency_ms: 24 }] };
+    } else if (path === '/api/audit/events') {
+      body = { service: 'honcho-memory-console', status: 'ok', total: 1, source: 'live', events: [{ id: 'audit-smoke', at: '2026-06-23T15:00:00Z', actor: 'operator', action: 'view.overview', outcome: 'ok', route: '/api/overview', method: 'GET', status_code: 200, token_fingerprint: 'sha256:9f3ab1c2d4e5', token_scope: 'console:read' }] };
+    } else if (path === '/api/settings') {
+      body = { auth: { enabled: true, configured: true, username_configured: true }, honcho_api: { url: 'http://honcho-memory-prod.internal', token_configured: true, token_fingerprint: 'sha256:9f3ab1c2d4e5' }, agent_registry: { agent_id: 'honcho-console-worker', display_name: 'Honcho Console Worker', tenant_id: 'sitiouno', runtime_vm: 'honcho-memory-prod', tailnet_ip: '100.64.0.10', environment: 'internal-smoke', honcho_workspace: 'hermes', ai_peer: 'Zeus', human_peer: 'Jean-Garcia', fleet_registry_configured: false, fleet_registry_fingerprint: null }, secrets: { jwt_secret_configured: true, database_url_configured: false, redis_url_configured: false, infisical_token_configured: false, provider_keys_configured: { openrouter: true, anthropic: false } }, local_health: { systemd_units: [], update_timer_unit: 'not configured', docker_services: [], disk_paths: ['/'], docker_compose_directory_configured: false }, frontend: { static_dir_configured: true } };
+    } else if (path === '/api/memory/workspaces') {
       body = pageEnvelope([{ id: 'hermes', metadata: { owner: 'Jean' }, configuration_keys: ['deriver'], created_at: '2026-06-19T16:00:00Z' }]);
     } else if (path === '/api/memory/workspaces/hermes/queue') {
       body = { total_work_units: 4, completed_work_units: 3, in_progress_work_units: 0, pending_work_units: 1, sessions: {} };
