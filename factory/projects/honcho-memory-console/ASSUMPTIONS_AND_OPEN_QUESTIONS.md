@@ -26,6 +26,7 @@ Status: G1 ready for autonomous Factory execution
 - Include server and service health view.
 - Design must be premium and better than SaaS for SitioUno internal use.
 - Project should be opened in Factory and run autonomously.
+- Delivery boundary is private Tailscale only. Jean explicitly does not want this console exposed to the public internet; a public `kidu.app` URL is not required for v1 acceptance.
 
 ## Open Questions That Should Not Block Initial Build
 
@@ -39,7 +40,7 @@ Status: G1 ready for autonomous Factory execution
 Factory should ask Jean only if:
 
 - deployment requires a secret that is missing from Infisical;
-- a public internet exposure decision is needed;
+- someone proposes changing the accepted private-only Tailscale boundary or exposing the console to the public internet;
 - a destructive memory action is proposed;
 - GitHub org permissions block creating/pushing required branches;
 - fleet registry access is blocked and no safe fallback exists.

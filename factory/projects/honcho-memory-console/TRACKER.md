@@ -167,11 +167,11 @@ Acceptance criteria checked:
 
 ### Non-negotiable constraints preserved from T00 baseline
 
-- Sandbox boundary: `kidu.app` / `*.kidu.app`, deploy under `/srv/factory/projects/<project>`, artifacts under `/srv/factory/artifacts/<project>/<run-id>`
-- Production HOLD until explicit Jean decision
+- Sandbox/delivery boundary for this project: private `honcho-memory-prod` Tailscale/internal interface only. Do not require or create public `kidu.app`/internet exposure for v1.
+- Production/public internet exposure HOLD unless Jean separately reverses this security decision.
 - No raw secrets in UI/logs/screenshots
 - Browser UI gate mandatory (Playwright, screenshots, console_error_check)
-- Gate delivery registered only with sandbox URL + QA_REPORT.md evidence
+- Gate delivery registered only with private Tailscale/internal URL evidence + QA_REPORT.md evidence
 
 ### Git state
 

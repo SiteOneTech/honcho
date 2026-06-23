@@ -426,3 +426,5 @@ Waivers / pending by phase contract:
 
 - Browser/Playwright evidence against deployed console in T11/T11B.
 - Desktop/mobile screenshots and console-error/core-flow checks from the deployed surface.
+- Private Tailscale/internal URL or address tested. Public internet URL is not required and should not be treated as a blocker.
+- Per-view live-data verification for Overview, Agents, Agent detail, Memory, Health, Telemetry, Audit, and Settings.

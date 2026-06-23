@@ -78,3 +78,18 @@ Status: accepted
 Decision: Agent VM identity should come from fleet registry when reachable. Honcho workspaces/peers are a secondary discovery signal.
 
 Rationale: Honcho knows memory workspaces; fleet registry knows actual VM/agent tenancy. The console needs both.
+
+## ADR-008 - Delivery boundary is private Tailscale only
+
+Status: accepted
+
+Decision: Honcho Memory Console is an internal operations interface for supervising the self-hosted Honcho service and must remain inside Jean/SitioUno's private Tailscale network. A public `kidu.app` URL or other internet-exposed URL is not required for acceptance and should not be added for v1 without a separate explicit security decision from Jean.
+
+Rationale: The console exposes operational health, agent/token fingerprints, memory metadata, and service diagnostics. Even with application auth, the safest boundary for v1 is private Tailnet access only.
+
+Consequences:
+
+- QA and delivery evidence should use the internal Tailscale/private address or hostname that Jean already uses to view the console.
+- A missing public URL is not a blocker and should not be escalated to Jean again.
+- The remaining blockers are functional/live-data wiring, relevance of each operational view, deployed internal QA, and final runbook evidence.
+- Workers must continue connecting and reviewing every created interface so the console behaves like a useful internal `honcho.dev`-style service view for the self-hosted environment, without exposing it to the internet.

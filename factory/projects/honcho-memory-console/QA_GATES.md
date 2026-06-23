@@ -26,7 +26,8 @@ Status: G1 ready for autonomous Factory execution
 
 - Open deployed console through Tailscale.
 - Verify login/auth boundary.
-- Verify Overview, Agents, Agent detail, Memory, Health pages.
+- Verify Overview, Agents, Agent detail, Memory, Health, Telemetry, Audit, and Settings pages.
+- Verify every page is connected to live backend data or shows an explicit, truthful unavailable/error state; fixture-only data is allowed only in clearly labeled dev/test mode and must not be presented as production state.
 - Confirm dark/light mode if implemented.
 - Confirm responsive layout at desktop and mobile widths.
 - Capture screenshot or Playwright trace evidence.
@@ -52,7 +53,9 @@ Each QA task must record:
 
 - command run;
 - actual output summary;
-- URL tested;
+- private Tailscale/internal URL or address tested;
 - screenshot/trace path if browser QA;
 - commit SHA;
 - unresolved risks.
+
+Public internet URL evidence is explicitly not required for this project and must not replace private Tailscale QA.

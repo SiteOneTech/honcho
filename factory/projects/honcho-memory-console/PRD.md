@@ -16,6 +16,10 @@ Honcho Memory Console
 
 The self-hosted Honcho server is operational but lacks a polished UI for multi-agent operations. The SaaS has an app dashboard, but our self-hosted deployment exposes mostly API/Swagger and a minimal custom update panel. As SitioUno adds derived agents, Zeus needs a first-party console to see who consumes memory, which VM/token is responsible, and whether the memory service is healthy.
 
+## Delivery Boundary
+
+This is an internal operational console, not a public web product. It must stay reachable only inside Jean/SitioUno's private Tailscale network or equivalent private interface. Public internet exposure is out of scope and not an acceptance requirement.
+
 ## Users
 
 - Jean: business owner/operator who needs confidence and high-level visibility.
@@ -102,4 +106,4 @@ The console should feel like a premium internal control plane:
 - Shows real data from current self-hosted Honcho.
 - Browser QA evidence captured.
 - Security review passed.
-- Delivery report includes URLs, commands, commit, and rollback notes.
+- Delivery report includes the private Tailscale/internal URL or address tested, commands, commit, and rollback notes. It must not require a public URL.

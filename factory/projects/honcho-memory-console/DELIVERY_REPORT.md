@@ -72,7 +72,7 @@ Rollback was documented but not executed because T11/T11B need the deployed cons
 
 ## Final Delivery Must Include
 
-- Deployed URL.
+- Deployed private Tailscale/internal URL or address; no public internet URL is required or desired for v1.
 - Auth boundary description.
 - Commit SHA and branch.
 - Services restarted and status output.
