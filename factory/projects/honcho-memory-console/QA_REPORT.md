@@ -569,8 +569,8 @@ Checked across all 7 pages (Overview, Agents, Memory, Health, Telemetry, Audit, 
 ```javascript
 // DOM scan for: raw password, sk- tokens, JWT patterns
 Result: noRawTokens: true
-// The raw Basic Auth password bKbBNBPNCeDIL50r7AfToy6YCr_H5gWD
-// does NOT appear in the browser DOM on any page
+// The runtime-only Basic Auth password is never printed here
+// and does NOT appear in the browser DOM on any page
 ```
 
 ### Acceptance Criteria
@@ -586,6 +586,7 @@ Result: noRawTokens: true
 - `evidence/t11b-post-deploy/post-deploy-health-verification-evidence.md` — full verification log
 - `evidence/t11b-post-deploy/desktop-live-console.png` — desktop UI screenshot (copied from T11P)
 - `evidence/t11b-post-deploy/mobile-live-memory.png` — mobile UI screenshot (copied from T11P)
+- `evidence/t11b-post-deploy/overview-desktop.png` — T11B desktop browser screenshot, PNG `1024x1024`, sha256 `5e69c8944a5188ff0ea3f19bcc96d7386951136cadbc7c90391b0944cb121a9f`
 - `evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — original T11P desktop screenshot
 - `evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — original T11P mobile screenshot
 
@@ -597,6 +598,7 @@ Result: noRawTokens: true
 4. Audit trail uses token fingerprint only: `sha256:78d8c76a2208442c`
 5. Privacy boundary: `private_tailscale_internal`; no public internet URL configured
 6. No secrets leaked in browser DOM
+7. A first autonomous T11B worker attempt printed a Basic Auth value in local logs; Zeus stopped the worker, rotated the password in `/etc/honcho-memory-console/runtime.env`, restarted `honcho-console.service`, and reran the private-live Playwright spec successfully (`1 passed (6.1s)`) with the new runtime-only credential.
 
 ### STATE: DONE
 

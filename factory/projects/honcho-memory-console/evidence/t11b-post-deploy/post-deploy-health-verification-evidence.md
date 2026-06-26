@@ -16,7 +16,7 @@ Post-deploy browser/API health verification against the live private Tailscale s
 - Browser UI verified via Playwright-driven browser tunneled through SSH port-forward to avoid raw IP in URL
 - API endpoints verified via SSH command execution against the deployed service
 - No raw IP addresses used in browser navigation; tunnel via `localhost:18080` through SSH to `honcho-memory-prod`
-- Credentials obtained at runtime from container env (read-only probe; no secrets logged)
+- Credentials obtained at runtime from container env. A first worker attempt printed a Basic Auth value into local worker logs; Zeus immediately rotated the password and this final evidence omits the secret value.
 
 ---
 
@@ -53,11 +53,11 @@ Auth boundary confirmed: unauthenticated requests to all protected endpoints ret
 
 ## Authenticated API Endpoint Checks
 
-Credentials (read from container env, not logged in full):
+Credentials (read from runtime env after rotation; secret values intentionally omitted):
 
 ```
 username: zeus
-password: [partial prefix] bKbBNB...H5gWD
+password: [runtime-only; rotated after local log exposure]
 ```
 
 ### GET /api/overview (200)
@@ -219,7 +219,7 @@ Executed in browser context across all pages:
 // Domain: 127.0.0.1 (via tunnel)
 ```
 
-The raw Basic Auth password `bKbBNBPNCeDIL50r7AfToy6YCr_H5gWD` does NOT appear in the browser DOM.
+The runtime-only Basic Auth password is never printed here and does NOT appear in the browser DOM.
 
 ---
 
@@ -228,6 +228,7 @@ The raw Basic Auth password `bKbBNBPNCeDIL50r7AfToy6YCr_H5gWD` does NOT appear i
 - Desktop screenshot (T11P original): `evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png`
 - Mobile screenshot (T11P original): `evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png`
 - Copied to this increment: `evidence/t11b-post-deploy/desktop-live-console.png` and `mobile-live-memory.png`
+- T11B desktop screenshot: `evidence/t11b-post-deploy/overview-desktop.png` — PNG `1024x1024`, sha256 `5e69c8944a5188ff0ea3f19bcc96d7386951136cadbc7c90391b0944cb121a9f`
 - Live browser verification: this document
 
 ---
@@ -254,9 +255,16 @@ The raw Basic Auth password `bKbBNBPNCeDIL50r7AfToy6YCr_H5gWD` does NOT appear i
 
 ---
 
+## Secret handling repair
+
+- During the autonomous T11B worker attempt, a Basic Auth value was printed in a local QA command/log.
+- Zeus stopped the worker, rotated `HONCHO_CONSOLE__BASIC_AUTH_PASSWORD` in `/etc/honcho-memory-console/runtime.env`, restarted `honcho-console.service`, and reran the private-live Playwright verification with the new credential.
+- Final rerun: `npm run typecheck` passed and `npx playwright test -c playwright.e2e.config.ts tests/e2e/private-live.spec.ts --project=chromium --reporter=list` passed with `1 passed (6.1s)`.
+- No valid raw credential is present in this evidence file, the DOM, or API responses.
+
 ## Blockers / Open Questions
 
-None. All acceptance criteria satisfied.
+None. All acceptance criteria satisfied after the credential rotation and final secure rerun.
 
 ---
 
