@@ -557,3 +557,107 @@ The new spec `console/frontend/tests/e2e/private-live.spec.ts` validates:
 
 - The prior blocker was not a Jean/public-pass decision. It was stale deploy + invalid expiring JWT token + missing Basic Auth access for the QA worker.
 - T11P is now unblocked with real deployed evidence. Public internet exposure remains intentionally absent.
+
+---
+
+## T11B Post-Deploy Browser/API Health Verification Evidence
+
+**Task:** honcho-memory-console-t11b-post-deploy-browser-api-health-veri
+**Run:** run-1782509558-ece794aa
+**Captured:** 2026-06-26T21:42Z
+**Branch:** `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea`
+**Worktree:** `/home/jean/Projects/.worktrees/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea`
+
+### Target
+
+Live private Tailscale sandbox at `honcho-memory-prod:8080` (bound to `100.71.144.114:8080`, Tailscale-only).
+
+### Verification Method
+
+- Browser UI: Playwright browser via SSH tunnel `localhost:18080 → honcho-memory-prod:8080` to avoid raw IP in URL
+- API: SSH command execution against `root@honcho-memory-prod`
+- Credentials read at runtime from container env (read-only probe; not persisted)
+
+### Runtime State
+
+```
+honcho-console.service: active (exited) since Fri 2026-06-26 21:21:33 UTC
+honcho-memory-console: Up N minutes (healthy)
+honcho-api-1: Up 2 days (healthy)
+honcho-deriver-1: Up 2 days
+honcho-redis-1: Up 2 days (healthy)
+honcho-database-1: Up 7 days (healthy)
+uvicorn: pid=3034944, host=100.71.144.114, port=8080
+```
+
+### Unauthenticated Endpoint Status
+
+| Endpoint | HTTP Status |
+|----------|-------------|
+| GET /healthz | 200 |
+| GET / | 401 |
+| GET /api/overview | 401 |
+| GET /api/agents | 401 |
+| GET /api/health | 401 |
+
+Auth boundary: confirmed. All protected endpoints return 401 without credentials.
+
+### Authenticated API Endpoints
+
+| Endpoint | Status | Key Findings |
+|----------|--------|-------------|
+| GET /api/overview | 200 | honcho_api.available=true, latency_ms=7, 1 agent, 2 workspaces, queue_total=18 |
+| GET /api/agents | 200 | 1 agent (zeus), token_fingerprint=sha256:78d8c76a2208442c, no raw tokens |
+| GET /api/health/services | 200 | 15 checks: honcho-api=healthy, disk=healthy(40.79%), memory=healthy(18.4%), cpu=healthy(11.28%), provider-config=degraded (no API keys — expected) |
+| GET /api/telemetry | 200 | 58 requests_24h, error_rate=0.327, no raw tokens |
+| GET /api/audit/events | 200 | 59 events, token_fingerprint=sha256:78d8c76a2208442c (fingerprint only), no raw credentials |
+
+### Browser Console Check
+
+```
+Checked across all 7 pages (Overview, Agents, Memory, Health, Telemetry, Audit, Settings):
+  - console_messages: 0
+  - js_errors: 0
+  - total_messages: 0
+  - total_errors: 0
+```
+
+### Token/Secret Leak Check (Browser DOM)
+
+```javascript
+// DOM scan for: raw password, sk- tokens, JWT patterns
+Result: noRawTokens: true
+// The runtime-only Basic Auth password is never printed here
+// and does NOT appear in the browser DOM on any page
+```
+
+### Acceptance Criteria
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| After private Tailscale sandbox deploy, verify browser console and API health endpoints | PASS | All 7 pages navigated; all API endpoints return correct HTTP codes |
+| Capture screenshot or trace evidence and curl/status output | PASS | Screenshots in evidence/t11b-post-deploy/; API curl output in post-deploy-health-verification-evidence.md |
+| Confirm deployed UI hides raw tokens/secrets | PASS | Browser DOM scan confirms no raw password, sk-, or JWT patterns |
+
+### Evidence Files
+
+- `evidence/t11b-post-deploy/post-deploy-health-verification-evidence.md` — full verification log
+- `evidence/t11b-post-deploy/desktop-live-console.png` — desktop UI screenshot (copied from T11P)
+- `evidence/t11b-post-deploy/mobile-live-memory.png` — mobile UI screenshot (copied from T11P)
+- `evidence/t11b-post-deploy/overview-desktop.png` — T11B desktop browser screenshot, PNG `1024x1024`, sha256 `5e69c8944a5188ff0ea3f19bcc96d7386951136cadbc7c90391b0944cb121a9f`
+- `evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — original T11P desktop screenshot
+- `evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — original T11P mobile screenshot
+
+### Security Notes
+
+1. `/healthz` intentionally returns 200 unauthenticated (liveness probe)
+2. All other endpoints require valid Basic Auth
+3. No raw tokens, passwords, Authorization headers, or JWTs in API responses
+4. Audit trail uses token fingerprint only: `sha256:78d8c76a2208442c`
+5. Privacy boundary: `private_tailscale_internal`; no public internet URL configured
+6. No secrets leaked in browser DOM
+7. A first autonomous T11B worker attempt printed a Basic Auth value in local logs; Zeus stopped the worker, rotated the password in `/etc/honcho-memory-console/runtime.env`, restarted `honcho-console.service`, and reran the private-live Playwright spec successfully (`1 passed (6.1s)`) with the new runtime-only credential.
+
+### STATE: DONE
+
+T11B complete. No blockers. Next task: T12 (Final delivery report and runbook update).
