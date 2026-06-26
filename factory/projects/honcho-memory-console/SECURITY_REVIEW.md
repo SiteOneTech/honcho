@@ -148,3 +148,9 @@ Verification:
 - API schema scan: custom `create_app().openapi()` assertion -> `runtime_secret_value_leaks: 0`, `secret_field_name_leaks: 0`, `schema_paths: 19`.
 
 Deployment blockers from this review: none for repo-level T09S. Remaining gated evidence for T10/T11/T11B: sandbox/browser proof that no raw token values render in deployed UI, plus VM service/env permission checks.
+
+## T12 Production Hold Notice
+
+Production deployment (public URL, kidu.app, or internet-facing) is **ON HOLD** pending explicit decision by Jean García. This delivery is scoped to the private Tailscale sandbox on `honcho-memory-prod` only.
+
+Security verdict for this private Tailscale delivery: **PASS** — no raw tokens, passwords, Authorization headers, or JWTs in API responses or browser DOM. Audit trail uses fingerprint only. Privacy boundary `private_tailscale_internal` enforced. No public internet URL exists.
