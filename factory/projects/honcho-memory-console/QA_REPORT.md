@@ -553,7 +553,82 @@ The new spec `console/frontend/tests/e2e/private-live.spec.ts` validates:
 - `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — PNG `1440x1000`, sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171`.
 - `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — PNG `390x1023`, sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56`.
 
+### T11P Rework Session Evidence — 2026-06-26
+
+Scope: `honcho-memory-console-t11p-private-tailscale-playwright-ui-qa-`.
+Session: `run-1782508715-15423d63`.
+
+**Worktree**: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-123-t11p-private-tailscale-playwright-ui-qa`
+**Branch**: `factory/honcho-memory-console/inc-123-t11p-private-tailscale-playwright-ui-qa`
+**Commit**: `7cf4719 test(console): add private live Playwright QA evidence`
+
+#### Local verification (this session)
+
+| Command | Result |
+|---|---|
+| `uv run --frozen pytest console/backend/tests -q` | `41 passed in 5.21s` |
+| `npm test` (frontend contract) | `21 passed, 0 failed` |
+| `CI=1 npm run smoke` (Playwright Chromium) | `3 passed (16.2s)` |
+| `git restore T05/T07/T08 screenshot side-effects` | clean worktree |
+
+#### Deployed service verification (this session)
+
+| Check | Result |
+|---|---|
+| Service uptime | `http://100.71.144.114:8080/healthz` → `200 {"status":"ok","service":"honcho-memory-console"}` |
+| Service auth boundary | `/` unauthenticated → `ERR_INVALID_AUTH_CREDENTIALS` (middleware working correctly) |
+| Deployed API route | Confirmed via browser console on `/healthz` page |
+| Password from VM | Partially truncated in terminal output (`bKbBNB...5gWD`); full password not printable due to `...` format in runtime.env |
+| Browser auth cache | **BLOCKER** — `ERR_INVALID_AUTH_CREDENTIALS` persists across `about:blank` clears; browser has invalid credentials cached at the HTTP session layer; Playwright `auth` option confirmed absent from `page.goto()` type signature; `setExtraHTTPHeaders` approach times out because the password is truncated/invalid |
+
+#### Browser QA blocker (this session)
+
+**Cause**: Browser HTTP auth session has invalid credentials cached (`net::ERR_INVALID_AUTH_CREDENTIALS`). Navigation to `/` or any `/#/` route fails at the browser session layer before reaching the app. Workarounds attempted:
+
+1. `about:blank` → navigate → still cached
+2. `http://operator:PASSWORD@host/` → same error
+3. `page.setExtraHTTPHeaders({Authorization})` → 30s timeout (wrong password)
+4. `fetch()` from `/healthz` page context → `/healthz` succeeds, `/api/overview` with auth header → timeout
+5. Terminal security scan blocks `curl -u` to raw IP
+
+**Root cause**: The password shown by `ssh root@host 'grep PASS /etc/honcho-memory-console/runtime.env'` was truncated to `bKbBNB...5gWD` in the output. The `...` indicates the middle of the password was replaced. Without the full password, auth always fails.
+
+**Fix**: Obtain the full password from `/etc/honcho-memory-console/runtime.env` on the VM or rotate it, then re-run browser QA.
+
+#### Evidence paths (committed, from prior session `7cf4719`)
+
+| Artifact | Path | Hash |
+|---|---|---|
+| Desktop console screenshot | `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` | sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171` |
+| Mobile memory screenshot | `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` | sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56` |
+
+#### Prior session evidence (from QA_REPORT.md lines 503–559)
+
+| Endpoint | Result |
+|---|---|
+| `/api/overview` | 200, `status=degraded`, private Tailscale boundary |
+| `/api/memory/workspaces` | 200, real Honcho workspaces |
+| `/api/agents` | 200, real agent registry for `zeus` |
+| `/api/health/services` | 200, truthful degraded/unknown states |
+| `/api/telemetry` | 200, real telemetry, fingerprint `sha256:*` |
+| `/api/audit/events` | 200, real audit events |
+| `/api/settings` | 200, sanitized, no raw secrets |
+
+Prior session also ran: `PLAYWRIGHT_BASE_URL=http://100.71.144.114:8080 npx playwright test ... --project=chromium --reporter=list` → `1 passed (6.2s)`.
+
+#### QA gates assessment
+
+| Gate | Status | Evidence |
+|---|---|---|
+| Browser QA | **PARTIAL** | Prior session: API 200 all endpoints, screenshots captured, Playwright passed. This session: **BLOCKED** by truncated password — browser cannot authenticate. |
+| Console error check | **BLOCKIAL** | Prior session: clean after token fix. This session: cannot verify (auth blocked). |
+| Desktop/mobile screenshots | **PASS** | Prior session screenshots committed at `7cf4719`. |
+| Local unit/contract tests | **PASS** | 41 backend + 21 frontend + 3 smoke this session. |
+| Privacy boundary | **PASS** | `private_tailscale_internal`, no public URL. |
+
 ### Closure note
 
-- The prior blocker was not a Jean/public-pass decision. It was stale deploy + invalid expiring JWT token + missing Basic Auth access for the QA worker.
-- T11P is now unblocked with real deployed evidence. Public internet exposure remains intentionally absent.
+- **BLOCKER**: Browser QA requires full password from VM runtime.env. Prior session completed all checks successfully with evidence committed.
+- No Jean/public-pass decision needed. No public URL was added or required.
+- Local tests (41 backend + 21 frontend + 3 smoke) pass.
+- Worktree is clean after restoring T05/T07/T08 screenshot side-effects.
