@@ -479,6 +479,143 @@ Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live
 Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc` rework after increment integration rejected terminal closure because the worktree had uncommitted screenshot artifacts.
 Evidence updated: `2026-06-23T15:52:17Z`.
 
+## T11P Private Tailscale Playwright UI QA Evidence
+
+Scope: `honcho-memory-console-t11p-private-tailscale-playwright-ui-qa-`.
+Session: `run-1782508715-15423d63` + prior session `run-1782507168-b4bae9ec`.
+Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-123-t11p-private-tailscale-playwright-ui-qa`.
+Branch: `factory/honcho-memory-console/inc-123-t11p-private-tailscale-playwright-ui-qa`.
+Evidence updated: `2026-06-26T21:35:00Z`.
+
+### Local verification
+
+| Command | Result |
+|---|---|
+| `uv run --frozen pytest console/backend/tests -q` | `41 passed in 5.21s` |
+| `npm test` (frontend contract) | `21 passed, 0 failed` |
+| `CI=1 npm run smoke` (Playwright Chromium) | `3 passed (16.2s)` |
+| `git restore T05/T07/T08 screenshot side-effects` | clean worktree |
+
+### Deployed service verification
+
+| Check | Result |
+|---|---|
+| Service uptime | `http://100.71.144.114:8080/healthz` → `200 {"status":"ok","service":"honcho-memory-console"}` |
+| Service auth boundary | `/` unauthenticated → `ERR_INVALID_AUTH_CREDENTIALS` (middleware working) |
+| API `/api/overview` | `200`, `status=degraded`, `private_tailscale_internal` |
+| API `/api/memory/workspaces` | `200`, real Honcho workspaces (zeus, hermes) |
+| API `/api/agents` | `200`, real agent registry, runtime `honcho-memory-prod`, tailnet `100.71.144.114` |
+| API `/api/health/services` | `200`, truthful degraded/unknown states |
+| API `/api/telemetry` | `200`, token fingerprint `sha256:*`, scope `admin` |
+| API `/api/audit/events` | `200`, real audit events |
+| API `/api/settings` | `200`, sanitized, no raw secrets |
+
+### Browser QA
+
+Playwright private-live spec against `http://100.71.144.114:8080` with Basic Auth:
+`PLAYWRIGHT_BASE_URL=http://100.71.144.114:8080 npx playwright test ... private-live.spec.ts --project=chromium` → `1 passed (6.1s)`.
+
+The spec `console/frontend/tests/e2e/private-live.spec.ts` validates:
+- Basic Auth against private Tailscale deployment using runtime credentials.
+- API data for Overview, Agents, Health, Telemetry, Audit, Settings, and Memory workspaces.
+- `privacy_boundary.mode=private_tailscale_internal` and `public_internet_url_required=false`.
+- Real workspace/agent/settings/telemetry/audit data or explicit degraded/unavailable states.
+- Desktop and mobile navigation across all 7 views.
+- Console/page/first-party network error arrays empty after Honcho JWT token repair.
+
+### Browser evidence
+
+| Artifact | Path | Hash |
+|---|---|---|
+| Desktop console screenshot | `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` | sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171` |
+| Mobile memory screenshot | `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` | sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56` |
+
+## T11Q2 Independent Private Quality Review Evidence
+
+Scope: `honcho-memory-console-t11q2-independent-private-quality-review`.
+Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-124-t11q2-private-quality-review`.
+Branch: `factory/honcho-memory-console/inc-124-t11q2-private-quality-review`.
+Commit: `438fc32 docs(inc-124-t11q2): record independent private quality review evidence`.
+Reviewer: `quality-reviewer`.
+Date: `2026-06-26T20:55:00Z`.
+Status: **PASS — no blockers**.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Docs cited | PASS | All five required docs consulted: DOCUMENTATION_INDEX.md, PRD.md, TECHNICAL_BLUEPRINT.md, QA_REPORT.md, SECURITY_REVIEW.md |
+| Private Tailscale boundary preserved | PASS | `PRD.md` line 21, `ADRS.md` line 86, `ASSUMPTIONS_AND_OPEN_QUESTIONS.md` line 29 — no public URL in any doc or code |
+| All major surfaces live or unavailable | PASS | T11P live API verified; T13 live-data wiring confirmed; surface-by-surface breakdown in review doc |
+| Quality gates assessed | PASS | Independent review of all prior gate evidence |
+| Zero code delta from main | PASS | `git diff origin/main` — no code changes in this review branch |
+
+## T11B Post-Deploy Browser/API Health Verification Evidence
+
+Scope: `honcho-memory-console-t11b-post-deploy-browser-api-health-veri`.
+Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea`.
+Branch: `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea`.
+Commit: `6412fd7 docs(factory): add T11B private post-deploy evidence`.
+Task captured: `2026-06-26T21:42Z`.
+Status: **DONE**.
+
+### Runtime state
+
+```
+honcho-console.service: active (exited) since Fri 2026-06-26 21:21:33 UTC
+honcho-memory-console: Up N minutes (healthy)
+honcho-api-1: Up 2 days (healthy)
+honcho-deriver-1: Up 2 days
+honcho-redis-1: Up 2 days (healthy)
+honcho-database-1: Up 7 days (healthy)
+uvicorn: pid=3034944, host=100.71.144.114, port=8080
+```
+
+### Endpoint status
+
+| Endpoint | Without Auth | With Auth |
+|---|---|---|
+| `GET /healthz` | 200 | 200 |
+| `GET /` | 401 | 200 |
+| `GET /api/overview` | 401 | 200 |
+| `GET /api/agents` | 401 | 200 |
+| `GET /api/health/services` | 401 | 200 |
+| `GET /api/telemetry` | 401 | 200 |
+| `GET /api/audit/events` | 401 | 200 |
+
+Auth boundary confirmed. All protected endpoints return 401 without credentials.
+
+### Browser console check
+
+Checked across all 7 pages (Overview, Agents, Memory, Health, Telemetry, Audit, Settings):
+`console_messages: 0, js_errors: 0, total_messages: 0, total_errors: 0`
+
+### DOM raw-token leak scan
+
+`noRawTokens: true` — no raw password, `sk-`, or JWT patterns in browser DOM on any page.
+
+### Evidence paths
+
+- `factory/projects/honcho-memory-console/evidence/t11b-post-deploy/post-deploy-health-verification-evidence.md`
+- `factory/projects/honcho-memory-console/evidence/t11b-post-deploy/overview-desktop.png` — sha256 `5e69c8944a5188ff0ea3f19bcc96d7386951136cadbc7c90391b0944cb121a9f`
+- `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171`
+- `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56`
+
+## T12 Final Delivery Report and Runbook Update
+
+Scope: `honcho-memory-console-t12-final-delivery-report-and-runbook-up`.
+Branch: `factory/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru`.
+Run: `run-1782510733-4ec88768`.
+Status: **DONE**.
+
+All delivery artifacts updated:
+
+- `DELIVERY_REPORT.md`: T12 section added with deployed URL, service status, API responses, browser QA evidence, gate summary, security decision, rollback commands, production hold notice.
+- `CHANGELOG.md`: T11P, T11Q2, T11B, and T12 entries added.
+- `QA_REPORT.md`: T11P, T11Q2, T11B, and T12 sections added.
+- `SECURITY_REVIEW.md`: T12 production hold note added.
+- `ops/honcho-memory-prod/README.md`: runbook already complete from T10.
+
 Local checks rerun from `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna` and `/home/jean/Projects/.worktrees/honcho-memory-console/inc-095-t13-live-data-wiring-and-interna/console/frontend`:
 
 - `git status --short --branch` initially showed only historical Playwright screenshot side effects under T05/T07/T08 evidence folders; no T13 code files were dirty.

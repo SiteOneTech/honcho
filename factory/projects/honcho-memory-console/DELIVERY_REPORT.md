@@ -128,8 +128,130 @@ Branch/worktree: `factory/honcho-memory-console/inc-095-t13-live-data-wiring-and
 
 ## T13 Rework Closure Delivery Update
 
-Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc`.
+Scope: `honcho-memory-console-t13-live-data-wiring-and-internal-tailsc` rework after increment integration rejected the prior terminal status because the worktree had uncommitted screenshot artifacts.
 Updated: `2026-06-23T15:52:17Z`.
+
+## T12 Final Delivery Report
+
+Scope: `honcho-memory-console-t12-final-delivery-report-and-runbook-up`.
+Updated: `2026-06-26T22:00:00Z`.
+Task: T12 - Final delivery report and runbook update.
+Run: `run-1782510733-4ec88768`.
+Branch: `factory/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru`.
+
+### Deployed Surface
+
+| Field | Value |
+|---|---|
+| Deployed private URL | `http://100.71.144.114:8080/` |
+| Privacy boundary | `private_tailscale_internal` |
+| Public internet URL | None — intentionally absent per Jean decision |
+| Sandbox deploy path | `/srv/factory/projects/honcho-memory-console/repo` |
+| Sandbox artifact path | `/srv/factory/artifacts/honcho-memory-console/run-1782095965-30c0fb8f/` |
+| Docker Compose path | `ops/honcho-memory-prod/docker-compose.yml` |
+| Systemd unit | `/etc/systemd/system/honcho-console.service` |
+| Runtime env | `/etc/honcho-memory-console/runtime.env` (`0600`, secret values not printed or committed) |
+| Deployed branch | `factory/honcho-memory-console/inc-110-t10-deployment-packaging-for-hon` (T10 base) |
+| Runbook | `ops/honcho-memory-prod/README.md` |
+
+### Service Status (T11B verification — 2026-06-26T21:42Z)
+
+```
+honcho-console.service: active (exited) since Fri 2026-06-26 21:21:33 UTC
+honcho-memory-console: Up N minutes (healthy)
+honcho-api-1: Up 2 days (healthy)
+honcho-deriver-1: Up 2 days
+honcho-redis-1: Up 2 days (healthy)
+honcho-database-1: Up 7 days (healthy)
+uvicorn: pid=3034944, host=100.71.144.114, port=8080
+```
+
+| Endpoint | Without Auth | With Basic Auth |
+|---|---|---|
+| `GET /healthz` | 200 | 200 |
+| `GET /` | 401 | 200 |
+| `GET /api/overview` | 401 | 200 |
+| `GET /api/agents` | 401 | 200 |
+| `GET /api/health/services` | 401 | 200 |
+| `GET /api/telemetry` | 401 | 200 |
+| `GET /api/audit/events` | 401 | 200 |
+| `GET /api/settings` | 401 | 200 |
+
+Auth boundary: confirmed. All protected endpoints return 401 without credentials.
+
+### Authenticated API Response Summary
+
+| Endpoint | Status | Key Findings |
+|---|---|---|
+| `GET /api/overview` | 200 | `honcho_api.available=true`, latency_ms=7, 1 agent, 2 workspaces, queue_total=18 |
+| `GET /api/agents` | 200 | 1 agent (zeus), `token_fingerprint=sha256:78d8c76a2208442c`, no raw tokens |
+| `GET /api/health/services` | 200 | 15 checks; honcho-api=healthy, disk=40.79%, memory=18.4%, cpu=11.28%; provider-config=degraded (expected — no API keys configured) |
+| `GET /api/telemetry` | 200 | 58 requests_24h, error_rate=0.327, no raw tokens |
+| `GET /api/audit/events` | 200 | 59 events, token fingerprint only, no raw credentials |
+| `GET /api/memory/workspaces` | 200 | Real Honcho workspaces: zeus, hermes |
+| `GET /api/settings` | 200 | Sanitized flags, no raw token/secret values |
+
+### Browser/UI QA Evidence
+
+Source: T11P (`inc-123-t11p-private-tailscale-playwright-ui-qa`, commit `7cf4719`) + T11B (`inc-125-t11b-post-deploy-browser-api-hea`, commit `6412fd7`).
+
+| Check | Result |
+|---|---|
+| Playwright private-live spec | `1 passed (6.1s)` — Overview, Agents, Memory, Health, Telemetry, Audit, Settings navigated |
+| Browser console errors (7 pages) | `0` messages, `0` js_errors |
+| DOM raw-token leak scan | `noRawTokens: true` — no raw password, `sk-`, or JWT patterns in DOM |
+| Desktop screenshot | `evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171` |
+| Mobile screenshot | `evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56` |
+| T11B overview screenshot | `evidence/t11b-post-deploy/overview-desktop.png` — sha256 `5e69c8944a5188ff0ea3f19bcc96d7386951136cadbc7c90391b0944cb121a9f` |
+
+### Quality Gate Summary
+
+| Gate | Status | Reviewer | Notes |
+|---|---|---|---|
+| intake | PASS | factory-orchestrator | |
+| planning | PASS | factory-orchestrator | |
+| architecture | PASS | factory-orchestrator | |
+| functional | PASS | factory-orchestrator | |
+| security | PASS | factory-orchestrator | T09S repo-level pass |
+| quality | WAIVED | zeus | Private-only boundary — Jean authorized T11P/T11B replacement |
+| delivery | WAIVED | zeus | Private Tailscale only, no public URL; Jean authorized waiver |
+| implementation | PASS | claude-builder | |
+
+### Security Decision
+
+Source: T09S (`inc-105-t09s-security-review-for-auth-tokens-tel`, commit `8564c35`).
+
+Verdict: **PASS**. No raw tokens, passwords, Authorization headers, or JWTs in API responses or browser DOM. Audit trail uses fingerprint only (`sha256:78d8c76a2208442c`). Privacy boundary `private_tailscale_internal` enforced. No public internet URL exists.
+
+### Rollback Command
+
+Primary (script):
+```bash
+/srv/factory/projects/honcho-memory-console/repo/ops/honcho-memory-prod/rollback.sh
+```
+
+Manual fallback:
+```bash
+systemctl disable --now honcho-console.service
+cd /srv/factory/projects/honcho-memory-console/repo && docker compose -f ops/honcho-memory-prod/docker-compose.yml stop console
+systemctl start honcho-admin.service
+systemctl is-active honcho-admin.service
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
+```
+
+### Production Hold Notice
+
+Production deployment (public URL, kidu.app, or internet-facing) is **ON HOLD** pending explicit decision by Jean García. This delivery is scoped to the private Tailscale sandbox on `honcho-memory-prod` only.
+
+### Evidence Paths
+
+- QA report: `factory/projects/honcho-memory-console/QA_REPORT.md`
+- Security review: `factory/projects/honcho-memory-console/SECURITY_REVIEW.md`
+- Changelog: `factory/projects/honcho-memory-console/CHANGELOG.md`
+- Runbook: `ops/honcho-memory-prod/README.md`
+- Rollback script: `ops/honcho-memory-prod/rollback.sh`
+- T11P evidence: `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/`
+- T11B evidence: `factory/projects/honcho-memory-console/evidence/t11b-post-deploy/`
 
 ### Closure action
 
