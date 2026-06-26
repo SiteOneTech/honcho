@@ -227,3 +227,66 @@ no orphaned worktree cleanup required.
 - Browser UI gate mandatory (Playwright desktop+mobile screenshots, console_error_check).
 - Gate delivery registered only with private Tailscale URL evidence + QA_REPORT.md.
 - R3b is a reconciliation/documentation task — no code, no deploy, no credentials changed.
+
+---
+
+## R3b-2 Phase-Contract Reconciliation Evidence — 2026-06-26T21:05Z
+
+### Trigger
+
+Factory DB reconciliation anomaly `missing_mandatory_factory_phases` raised by `factory-reconciler`
+run `run-1782506941-e7ab9c2c`. Previous R3b evidence (2026-06-26T20:45Z) claimed T11B branch+worktree
+existed but inspection revealed the worktree path `inc-125-t11b-post-deploy-browser-api-hea` was never
+actually provisioned — only the branch existed in the repo.
+
+### Root cause
+
+T11B worktree was listed as "ready" in TRACKER.md but the worktree directory did not exist on disk.
+The branch `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea` was correctly
+created from commit `9a859cd` but no `git worktree add` was ever executed for it.
+
+### Anomaly resolution action taken
+
+Worktree `inc-125-t11b-post-deploy-browser-api-hea` provisioned from existing branch:
+
+```
+git worktree add /home/jean/Projects/.worktrees/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea \
+  factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea
+# HEAD is now at 9a859cd
+```
+
+Both required downstream worktrees now exist:
+
+| Worktree | Branch | Commit | Status |
+|---|---|---|---|
+| `inc-125-t11b-post-deploy-browser-api-hea` | `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea` | `9a859cd` | clean, checked out |
+| `inc-130-t12-final-delivery-report-and-ru` | `factory/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru` | `9a859cd` | clean, checked out |
+
+### Canonical phase contract verified (final state)
+
+| Phase | Task | Title | Status |
+|---|---|---|---|
+| implementation | T01-T09 | Backend/frontend implementation | done |
+| security_review | T09S | Security review for auth, tokens, telemetry | done |
+| quality_review | T11Q | Independent quality review | superseded |
+| deploy | T10 | Private Tailscale sandbox deploy packaging | done |
+| qa | T11B | Post-deploy browser/API health verification | ready (worktree provisioned) |
+| delivery | T12 | Final delivery report and runbook update | todo (worktree provisioned) |
+
+All 6 mandatory canonical UI/sandbox delivery phases have distinct tasks and provisioned worktrees.
+No orphaned branches, no phantom worktrees.
+
+### Git state (main checkout)
+
+- `git worktree list` shows 17 worktrees including both `inc-125-t11b` and `inc-130-t12`
+- T11B worktree: clean, no modified files
+- T12 worktree: clean, no modified files
+
+### Non-negotiable constraints preserved
+
+- Sandbox/delivery boundary: private `honcho-memory-prod` Tailscale/internal interface only.
+  No public `kidu.app`/internet exposure required.
+- Production HOLD until explicit Jean decision.
+- Browser UI gate mandatory (Playwright desktop+mobile screenshots, console_error_check).
+- Gate delivery registered only with private Tailscale URL evidence + QA_REPORT.md.
+- R3b-2 is a reconciliation/documentation task — no code, no deploy, no credentials changed.
