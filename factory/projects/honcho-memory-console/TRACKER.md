@@ -25,7 +25,7 @@ Status: G1 ready for autonomous Factory execution
 | T10 Private Tailscale sandbox deploy packaging for honcho-memory-prod | done | Repo-managed deploy pack under `ops/honcho-memory-prod`; private Tailscale deploy verified on `honcho-memory-prod` with systemd active, Docker health healthy, `/healthz=200`, unauth `/=401`, Honcho API `/health=200`, and rollback documented; evidence in QA_REPORT.md, DELIVERY_REPORT.md, and `evidence/t10-deployment-packaging/deploy-and-health-evidence.md` |
 | T11 Browser QA, accessibility, and visual polish pass | todo | Playwright/browser evidence |
 | T11Q Independent quality review of console UX/code | todo | Quality-review phase coverage |
-| T11B Post-deploy browser/API health verification | todo | Post-sandbox verification coverage |
+| T11B Post-deploy browser/API health verification | done | Post-sandbox verification complete 2026-06-26T21:42Z; all API endpoints 200 auth+unauth, browser 0 JS errors, no token leaks; evidence in `evidence/t11b-post-deploy/post-deploy-health-verification-evidence.md` |
 | T12 Final delivery report and runbook update | todo | Delivery closure |
 
 ## Current State
