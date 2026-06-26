@@ -8,6 +8,11 @@ Reviewed: yes
 Reviewer: Zeus Factory orchestrator bootstrap pass
 Status: G1 ready for autonomous Factory execution
 
+## 2026-06-26
+
+- T11P: Added private Tailscale Playwright UI QA evidence against live `http://100.71.144.114:8080`: repaired stale deploy and invalid Honcho API token, verified all `/api/*` endpoints return live data, validated `privacy_boundary.mode=private_tailscale_internal` and `public_internet_url_required=false`, ran desktop/mobile navigation across all 7 views, captured screenshots with empty console/page/network error arrays, and recorded T09S/T13/T11P cumulative evidence.
+- T11Q2: Independent quality review — verified all five acceptance criteria pass: no public URL requirement, Tailscale boundary preserved, all major surfaces live-data-backed or explicitly unavailable, protected-value scan clean, security T09S passed, browser QA against private deployment passed. No blockers. Recorded in `QUALITY_REVIEW.md`.
+
 ## 2026-06-19
 
 - Created G1 Factory documentation pack from Jean request.
