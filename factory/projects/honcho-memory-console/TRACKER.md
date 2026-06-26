@@ -180,3 +180,50 @@ Acceptance criteria checked:
 - Base: `origin/main`
 - HEAD: `56eef07` (clean — only G1 docs, no runtime changes)
 - Status: clean (0 modified files before T00P edits)
+
+---
+
+## R3b Phase-Contract Reconciliation Evidence — 2026-06-26T20:45Z
+
+### Trigger
+
+Factory DB reconciliation anomaly `missing_mandatory_factory_phases` raised by `factory-reconciler`
+run `run-1782506288-2d5c3c95`. Project has all 6 mandatory canonical phases covered but T11B and T12
+branches/worktrees were orphaned/unstaged.
+
+### Anomaly resolution action taken
+
+Canonical phase contract verified: all 6 mandatory UI/sandbox delivery phases have distinct tasks:
+
+| Phase        | Task  | Title                                            | Status        |
+|--------------|-------|--------------------------------------------------|---------------|
+| implementation | T01-T09 | Backend/frontend implementation                  | done          |
+| security_review | T09S  | Security review for auth, tokens, telemetry      | done          |
+| quality_review | T11Q  | Independent quality review                       | superseded    |
+| deploy       | T10   | Private Tailscale sandbox deploy packaging       | done          |
+| qa           | T11B  | Post-deploy browser/API health verification      | ready         |
+| delivery     | T12   | Final delivery report and runbook update          | todo          |
+
+Branch `factory/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru` created from `origin/main`
+and worktree provisioned at `/home/jean/Projects/.worktrees/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru`.
+
+Branch `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea` was previously created
+from `origin/main` (commit `9a859cd`) and is ready for worker checkout. The branch exists in repo;
+no orphaned worktree cleanup required.
+
+### Git state
+
+- Worktree (main): `/home/jean/Projects/honcho`
+- Branch T12: `factory/honcho-memory-console/inc-130-t12-final-delivery-report-and-ru`
+- Branch T12 base: `origin/main` (commit `9a859cd`)
+- Branch T11B: `factory/honcho-memory-console/inc-125-t11b-post-deploy-browser-api-hea` (existing, clean)
+- Status: clean (0 modified files from this reconciliation action)
+
+### Non-negotiable constraints preserved
+
+- Sandbox/delivery boundary: private `honcho-memory-prod` Tailscale/internal interface only.
+  No public `kidu.app`/internet exposure required.
+- Production HOLD until explicit Jean decision.
+- Browser UI gate mandatory (Playwright desktop+mobile screenshots, console_error_check).
+- Gate delivery registered only with private Tailscale URL evidence + QA_REPORT.md.
+- R3b is a reconciliation/documentation task — no code, no deploy, no credentials changed.
