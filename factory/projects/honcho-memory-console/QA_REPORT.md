@@ -499,3 +499,61 @@ Closure note:
 
 - The rework blocker was branch/worktree hygiene only, not a product blocker and not a Jean decision.
 - Public internet URL remains intentionally absent; T13 delivery evidence continues to use private/internal boundary language only.
+
+## T11P Private Tailscale Playwright UI QA Evidence
+
+Scope: `honcho-memory-console-t11p-private-tailscale-playwright-ui-qa-`.
+Evidence updated: `2026-06-26T21:22:00Z`.
+Worktree: `/home/jean/Projects/.worktrees/honcho-memory-console/inc-123-t11p-private-tailscale-playwright-ui-qa`.
+Target: private Tailscale surface `http://100.71.144.114:8080`; no public `kidu.app` URL required.
+
+### Deployment/access repair performed before QA
+
+- Verified SSH access to `root@100.71.144.114` and sanitized service state.
+- Found live VM checkout still on stale T10 branch (`3c77bc9`) while `origin/main` had T13/T11P reconciliation (`be125ac`).
+- Ran the repo deployment package on `honcho-memory-prod` with branch `main`; Docker image rebuilt and `honcho-console.service` returned active/healthy.
+- Restored correct Tailscale bind after a manual compose run temporarily bound uvicorn to `127.0.0.1`; final listener is `100.71.144.114:8080` and `/healthz` returns `200`.
+- Rotated the console's server-side Honcho API token to a no-expiry admin JWT generated inside the live Honcho API container. Reason: the existing generated token had a string `exp` claim and failed Honcho's JWT verifier, causing `/api/memory/*` to return `502`. The token value was not printed or committed.
+
+### Live API verification
+
+All checks used Basic Auth credentials read from `/etc/honcho-memory-console/runtime.env` on the private VM without printing secret values.
+
+| Endpoint | Result | Notes |
+|---|---:|---|
+| `/healthz` | 200 | `{"status":"ok","service":"honcho-memory-console"}` |
+| `/api/overview` | 200 | `status=degraded`, private Tailscale boundary, no scaffold status |
+| `/api/memory/workspaces` | 200 | Real Honcho workspaces returned (`zeus`, `hermes`, etc.) |
+| `/api/agents` | 200 | Real agent registry/config row for `zeus`, runtime `honcho-memory-prod`, tailnet `100.71.144.114` |
+| `/api/health/services` | 200 | Real local service health checks; degraded/unknown states are truthful, not fixtures |
+| `/api/telemetry` | 200 | Real telemetry with token fingerprint `sha256:*`, token scope `admin` |
+| `/api/audit/events` | 200 | Real audit events from console access |
+| `/api/settings` | 200 | Sanitized settings, no raw token/secret values |
+
+### Playwright/browser QA
+
+Commands run from `console/frontend`:
+
+- `npm ci` -> `added 31 packages`, `found 0 vulnerabilities`.
+- `npm run typecheck` -> `tsc --noEmit` passed.
+- `PLAYWRIGHT_BASE_URL=http://100.71.144.114:8080 npx playwright test -c playwright.e2e.config.ts tests/e2e/private-live.spec.ts --project=chromium --reporter=list` -> `1 passed (6.2s)`.
+
+The new spec `console/frontend/tests/e2e/private-live.spec.ts` validates:
+
+- Basic Auth against the private Tailscale deployment using runtime credentials loaded only into process environment.
+- API data for Overview, Agents, Health, Telemetry, Audit, Settings, and Memory workspaces.
+- `privacy_boundary.mode=private_tailscale_internal` and `public_internet_url_required=false`.
+- No `status=scaffold` on overview.
+- Real workspace/agent/settings/telemetry/audit data, or explicit degraded/unknown service-health states.
+- Desktop and mobile UI navigation across Overview, Agents, Memory, Health, Telemetry, Audit, and Settings.
+- Console/page/first-party network error arrays empty after the token repair.
+
+### Browser evidence paths
+
+- `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/desktop-live-console.png` — PNG `1440x1000`, sha256 `e5c460f77f796a47fa04f9f56d33d17187cdff507d58f4f2a4514aaac8366171`.
+- `factory/projects/honcho-memory-console/evidence/t11p-private-tailscale-ui-qa/mobile-live-memory.png` — PNG `390x1023`, sha256 `f742004bad5a644a4a42c73316dd58a30658e10d2aad5133370aa6851562eb56`.
+
+### Closure note
+
+- The prior blocker was not a Jean/public-pass decision. It was stale deploy + invalid expiring JWT token + missing Basic Auth access for the QA worker.
+- T11P is now unblocked with real deployed evidence. Public internet exposure remains intentionally absent.
